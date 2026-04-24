@@ -1,0 +1,256 @@
+{
+  "variablestore": [
+
+    {
+      "name": "ibmcloud_api_key",
+      "value": "YOUR_IBMCLOUD_API_KEY",
+      "secure": true,
+      "description": "IBM Cloud API key for all workspace operations."
+    },
+    {
+      "name": "ibmcloud_schematics_region",
+      "value": "ca-tor",
+      "description": "IBM Cloud Schematics service region. Supported: us-south, us-east, eu-gb, eu-de, ca-tor"
+    },
+    {
+      "name": "ibmcloud_cluster_region",
+      "value": "ca-tor",
+      "description": "IBM Cloud region where the ROKS cluster and VPC resources are created."
+    },
+    {
+      "name": "ibmcloud_resource_group",
+      "value": "default",
+      "description": "Resource group for all resources."
+    },
+
+    {
+      "name": "create_roks_cluster",
+      "value": "true",
+      "type": "bool",
+      "description": "Set to false to skip cluster creation and supply an existing cluster via roks_cluster_id_or_name."
+    },
+    {
+      "name": "roks_cluster_id_or_name",
+      "value": "",
+      "description": "Required when create_roks_cluster is false."
+    },
+    {
+      "name": "create_roks_transit_gateway",
+      "value": "true",
+      "type": "bool",
+      "description": "Set to false to skip Transit Gateway creation."
+    },
+    {
+      "name": "create_roks_registry_cos_instance",
+      "value": "true",
+      "type": "bool",
+      "description": "Set to false to skip COS instance creation for the OpenShift image registry."
+    },
+    {
+      "name": "roks_cluster_vpc_name",
+      "value": "tf-cluster-vpc",
+      "description": "Name of the cluster VPC."
+    },
+    {
+      "name": "openshift_cluster_name",
+      "value": "tf-openshift-cluster",
+      "description": "Name of the OpenShift cluster."
+    },
+    {
+      "name": "openshift_cluster_version",
+      "value": "4.18",
+      "description": "OpenShift version. Leave empty to use the latest available."
+    },
+    {
+      "name": "roks_workers_per_zone",
+      "value": "1",
+      "type": "number",
+      "description": "Worker nodes per availability zone."
+    },
+    {
+      "name": "roks_min_worker_vcpu_count",
+      "value": "16",
+      "type": "number",
+      "description": "Minimum vCPU count for auto-selecting the worker node flavor."
+    },
+    {
+      "name": "roks_min_worker_memory_gb",
+      "value": "64",
+      "type": "number",
+      "description": "Minimum memory (GB) for auto-selecting the worker node flavor."
+    },
+    {
+      "name": "roks_cos_instance_name",
+      "value": "tf-openshift-cos-instance",
+      "description": "Name of the COS instance created for the OpenShift image registry."
+    },
+    {
+      "name": "roks_transit_gateway_name",
+      "value": "tf-tgw",
+      "description": "Name of the Transit Gateway."
+    },
+
+    {
+      "name": "install_cert_manager",
+      "value": "true",
+      "type": "bool",
+      "description": "Set to false to skip cert-manager installation. cert_manager_namespace is still passed directly to ws3 when false."
+    },
+    {
+      "name": "cert_manager_namespace",
+      "value": "cert-manager",
+      "description": "Kubernetes namespace for cert-manager."
+    },
+    {
+      "name": "cert_manager_version",
+      "value": "v1.17.3",
+      "description": "cert-manager Helm chart version."
+    },
+
+    {
+      "name": "ibmcloud_cos_bucket_region",
+      "value": "us-south",
+      "description": "Region of the COS bucket containing FAR credentials and JWT files."
+    },
+    {
+      "name": "ibmcloud_cos_instance_name",
+      "value": "bnk-orchestration",
+      "description": "Name of the COS instance holding the FAR auth key and JWT."
+    },
+    {
+      "name": "ibmcloud_resources_cos_bucket",
+      "value": "bnk-schematics-resources",
+      "description": "Name of the COS bucket holding the FAR auth key and JWT files."
+    },
+
+    {
+      "name": "deploy_bnk",
+      "value": "true",
+      "type": "bool",
+      "description": "Set to false to skip FLO (ws3), CNEInstance (ws4), and License (ws5)."
+    },
+    {
+      "name": "far_repo_url",
+      "value": "repo.f5.com",
+      "description": "FAR repository URL for Docker and Helm images."
+    },
+    {
+      "name": "f5_bigip_k8s_manifest_version",
+      "value": "2.3.0-bnpp-ehf-2-3.2598.3-0.0.17",
+      "description": "Version of the f5-bigip-k8s-manifest chart. FLO and CIS versions are extracted from this."
+    },
+    {
+      "name": "f5_cne_far_auth_file",
+      "value": "f5-far-auth-key.tgz",
+      "description": "Filename of the FAR auth key archive in the COS bucket."
+    },
+    {
+      "name": "f5_cne_subscription_jwt_file",
+      "value": "trial.jwt",
+      "description": "Filename of the subscription JWT in the COS bucket."
+    },
+    {
+      "name": "flo_namespace",
+      "value": "f5-bnk",
+      "description": "Kubernetes namespace for the F5 Lifecycle Operator."
+    },
+    {
+      "name": "flo_utils_namespace",
+      "value": "f5-utils",
+      "description": "Kubernetes namespace for F5 utility components."
+    },
+    {
+      "name": "bigip_username",
+      "value": "admin",
+      "description": "BIG-IP username for the CIS controller. Leave blank if not using CIS."
+    },
+    {
+      "name": "bigip_password",
+      "value": "",
+      "secure": true,
+      "description": "BIG-IP password for the CIS controller. Leave blank if not using CIS."
+    },
+    {
+      "name": "bigip_url",
+      "value": "",
+      "description": "BIG-IP URL for the CIS controller. Leave blank if not using CIS."
+    },
+    {
+      "name": "cneinstance_deployment_size",
+      "value": "Small",
+      "description": "Deployment size for the CNEInstance. Options: Small, Medium, Large."
+    },
+    {
+      "name": "cneinstance_gslb_datacenter_name",
+      "value": "",
+      "description": "GSLB datacenter name. Leave empty if not using GSLB."
+    },
+    {
+      "name": "license_mode",
+      "value": "connected",
+      "description": "License mode. Options: connected, disconnected."
+    },
+
+    {
+      "name": "testing_create_tgw_jumphost",
+      "value": "true",
+      "type": "bool",
+      "description": "Create a jumphost in a client VPC connected to the cluster via Transit Gateway."
+    },
+    {
+      "name": "testing_create_cluster_jumphosts",
+      "value": "false",
+      "type": "bool",
+      "description": "Create one jumphost per availability zone inside the cluster VPC."
+    },
+    {
+      "name": "testing_ssh_key_name",
+      "value": "my-ssh-key",
+      "description": "Name of the IBM Cloud SSH key to inject into jumphosts. Must already exist in the target region."
+    },
+    {
+      "name": "testing_jumphost_profile",
+      "value": "",
+      "description": "Instance profile for jumphosts. Leave empty to auto-select."
+    },
+    {
+      "name": "testing_min_vcpu_count",
+      "value": "4",
+      "type": "number",
+      "description": "Minimum vCPU count for auto-selecting the jumphost profile."
+    },
+    {
+      "name": "testing_min_memory_gb",
+      "value": "8",
+      "type": "number",
+      "description": "Minimum memory (GB) for auto-selecting the jumphost profile."
+    },
+    {
+      "name": "testing_create_client_vpc",
+      "value": "false",
+      "type": "bool",
+      "description": "Set to true to create a new client VPC for the TGW jumphost. When false, testing_client_vpc_name must reference an existing VPC."
+    },
+    {
+      "name": "testing_client_vpc_name",
+      "value": "tf-testing-vpc",
+      "description": "Name of the client VPC for the TGW jumphost."
+    },
+    {
+      "name": "testing_client_vpc_region",
+      "value": "ca-tor",
+      "description": "Region for the client VPC and TGW jumphost."
+    },
+    {
+      "name": "testing_tgw_jumphost_name",
+      "value": "tf-testing-jumphost-tgw",
+      "description": "Name of the TGW-connected jumphost instance."
+    },
+    {
+      "name": "testing_cluster_jumphost_name_prefix",
+      "value": "tf-testing-jumphost-cluster",
+      "description": "Name prefix for cluster jumphosts. Zone is appended: <prefix>-<zone>."
+    }
+
+  ]
+}
