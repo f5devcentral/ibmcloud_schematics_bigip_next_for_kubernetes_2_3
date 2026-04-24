@@ -257,57 +257,57 @@ ibmcloud_schematics_bigip_next_for_kubernetes_2_3/
                         │ cluster name, TGW name
                         ▼
 ┌──────────────────────────────────────────────────┐
-│  ws2 — cert-manager                             │
-│  (Feature flag: install_cert_manager)           │
+│  ws2 — cert-manager                              │
+│  (Feature flag: install_cert_manager)            │
 │                                                  │
 │  - Namespace                                     │
 │  - Helm release                                  │
-│  - CRD registration                             │
+│  - CRD registration                              │
 └───────────────────────┬──────────────────────────┘
                         │ cert_manager_namespace
                         ▼
 ┌──────────────────────────────────────────────────┐
-│  ws3 — FLO (F5 Lifecycle Operator)              │
-│  (Feature flag: deploy_bnk)                     │
+│  ws3 — FLO (F5 Lifecycle Operator)               │
+│  (Feature flag: deploy_bnk)                      │
 │                                                  │
-│  - cert-manager ClusterIssuer + Certificates    │
-│  - NAD (Network Attachments)                    │
-│  - F5 Lifecycle Operator Helm                   │
-│  - F5 BNK CIS Helm + BIG-IP login secret        │
-│  - IBM IAM Trusted Profile                      │
-│  - privileged SCC (3 bindings)                  │
+│  - cert-manager ClusterIssuer + Certificates     │
+│  - NAD (Network Attachments)                     │
+│  - F5 Lifecycle Operator Helm                    │
+│  - F5 BNK CIS Helm + BIG-IP login secret         │
+│  - IBM IAM Trusted Profile                       │
+│  - privileged SCC (3 bindings)                   │
 └───────────────────────┬──────────────────────────┘
                         │ flo_namespace, flo_trusted_profile_id,
                         │ flo_cluster_issuer_name,
                         │ cneinstance_network_attachments
                         ▼
 ┌──────────────────────────────────────────────────┐
-│  ws4 — CNEInstance                              │
-│  (Feature flag: deploy_bnk)                     │
+│  ws4 — CNEInstance                               │
+│  (Feature flag: deploy_bnk)                      │
 │                                                  │
-│  - CNEInstance custom resource                  │
-│  - privileged SCC (16 bindings)                 │
-│  - Pod health validation                        │
+│  - CNEInstance custom resource                   │
+│  - privileged SCC (16 bindings)                  │
+│  - Pod health validation                         │
 └───────────────────────┬──────────────────────────┘
                         │ (License CRD registered)
                         ▼
 ┌──────────────────────────────────────────────────┐
-│  ws5 — License                                  │
-│  (Feature flag: deploy_bnk)                     │
+│  ws5 — License                                   │
+│  (Feature flag: deploy_bnk)                      │
 │                                                  │
-│  - License custom resource (k8s.f5net.com/v1)   │
-│  - JWT + operation mode                         │
+│  - License custom resource (k8s.f5net.com/v1)    │
+│  - JWT + operation mode                          │
 └───────────────────────┬──────────────────────────┘
                         │
                         ▼
 ┌──────────────────────────────────────────────────┐
-│  ws6 — Testing Jumphosts                        │
-│  (Feature flags: testing_create_tgw_jumphost,   │
-│   testing_create_cluster_jumphosts)             │
+│  ws6 — Testing Jumphosts                         │
+│  (Feature flags: testing_create_tgw_jumphost,    │
+│   testing_create_cluster_jumphosts)              │
 │                                                  │
-│  - Client VPC (optional)                        │
-│  - TGW-connected jumphost                       │
-│  - Per-zone cluster jumphosts (optional)        │
+│  - Client VPC (optional)                         │
+│  - TGW-connected jumphost                        │
+│  - Per-zone cluster jumphosts (optional)         │
 └──────────────────────────────────────────────────┘
 ```
 
