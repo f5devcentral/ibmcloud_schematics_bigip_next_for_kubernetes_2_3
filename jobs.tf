@@ -346,6 +346,14 @@ resource "null_resource" "destroy_ws6" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
@@ -380,6 +388,14 @@ resource "null_resource" "destroy_ws5" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
@@ -414,6 +430,14 @@ resource "null_resource" "destroy_ws4" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
@@ -448,6 +472,14 @@ resource "null_resource" "destroy_ws3" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
@@ -482,6 +514,14 @@ resource "null_resource" "destroy_ws2" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
@@ -515,6 +555,14 @@ resource "null_resource" "destroy_ws1" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
       curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
