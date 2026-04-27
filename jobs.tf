@@ -346,11 +346,11 @@ resource "null_resource" "destroy_ws6" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
@@ -372,11 +372,11 @@ resource "null_resource" "destroy_ws5" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
@@ -398,11 +398,11 @@ resource "null_resource" "destroy_ws4" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
@@ -424,11 +424,11 @@ resource "null_resource" "destroy_ws3" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
@@ -450,11 +450,11 @@ resource "null_resource" "destroy_ws2" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
@@ -475,11 +475,11 @@ resource "null_resource" "destroy_ws1" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      curl -sf -X PUT \
+      curl -s -X PUT \
         "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/destroy" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}'
+        -d '{}' || true
     EOT
   }
 
