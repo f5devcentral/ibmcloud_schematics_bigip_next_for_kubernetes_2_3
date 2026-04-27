@@ -422,3 +422,9 @@ variable "testing_cluster_jumphost_name_prefix" {
   type        = string
   default     = "tf-testing-jumphost-cluster"
 }
+
+variable "read_ws_outputs" {
+  description = "Set to true after all sub-workspaces have been applied to propagate their outputs into downstream workspace configs. Defaults to false so the first apply succeeds before any sub-workspace has a statefile."
+  type        = bool
+  default     = false
+}

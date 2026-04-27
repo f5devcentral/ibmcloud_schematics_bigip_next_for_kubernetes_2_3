@@ -124,13 +124,14 @@ resource "ibm_schematics_workspace" "ws1_roks_cluster" {
 }
 
 data "ibm_schematics_output" "ws1_roks_cluster" {
+  count        = var.read_ws_outputs ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws1_roks_cluster.id
   template_id  = ibm_schematics_workspace.ws1_roks_cluster.runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws1_outputs = try(data.ibm_schematics_output.ws1_roks_cluster.output_values, {})
+  ws1_outputs = var.read_ws_outputs ? try(data.ibm_schematics_output.ws1_roks_cluster[0].output_values, {}) : {}
 
   # Downstream wiring from ws1
   ws1_roks_cluster_name    = var.create_roks_cluster ? try(local.ws1_outputs["roks_cluster_name"], var.openshift_cluster_name) : var.roks_cluster_id_or_name
@@ -194,14 +195,14 @@ resource "ibm_schematics_workspace" "ws2_cert_manager" {
 }
 
 data "ibm_schematics_output" "ws2_cert_manager" {
-  count        = var.install_cert_manager ? 1 : 0
+  count        = (var.install_cert_manager && var.read_ws_outputs) ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws2_cert_manager[0].id
   template_id  = ibm_schematics_workspace.ws2_cert_manager[0].runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws2_outputs = try(data.ibm_schematics_output.ws2_cert_manager[0].output_values, {})
+  ws2_outputs = (var.install_cert_manager && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws2_cert_manager[0].output_values, {}) : {}
 }
 
 # ============================================================
@@ -333,14 +334,14 @@ resource "ibm_schematics_workspace" "ws3_flo" {
 }
 
 data "ibm_schematics_output" "ws3_flo" {
-  count        = var.deploy_bnk ? 1 : 0
+  count        = (var.deploy_bnk && var.read_ws_outputs) ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws3_flo[0].id
   template_id  = ibm_schematics_workspace.ws3_flo[0].runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws3_outputs = try(data.ibm_schematics_output.ws3_flo[0].output_values, {})
+  ws3_outputs = (var.deploy_bnk && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws3_flo[0].output_values, {}) : {}
 
   # Downstream wiring from ws3
   ws3_flo_namespace                   = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
@@ -451,14 +452,14 @@ resource "ibm_schematics_workspace" "ws4_cneinstance" {
 }
 
 data "ibm_schematics_output" "ws4_cneinstance" {
-  count        = var.deploy_bnk ? 1 : 0
+  count        = (var.deploy_bnk && var.read_ws_outputs) ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws4_cneinstance[0].id
   template_id  = ibm_schematics_workspace.ws4_cneinstance[0].runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws4_outputs = try(data.ibm_schematics_output.ws4_cneinstance[0].output_values, {})
+  ws4_outputs = (var.deploy_bnk && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws4_cneinstance[0].output_values, {}) : {}
 }
 
 # ============================================================
@@ -542,14 +543,14 @@ resource "ibm_schematics_workspace" "ws5_license" {
 }
 
 data "ibm_schematics_output" "ws5_license" {
-  count        = var.deploy_bnk ? 1 : 0
+  count        = (var.deploy_bnk && var.read_ws_outputs) ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws5_license[0].id
   template_id  = ibm_schematics_workspace.ws5_license[0].runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws5_outputs = try(data.ibm_schematics_output.ws5_license[0].output_values, {})
+  ws5_outputs = (var.deploy_bnk && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws5_license[0].output_values, {}) : {}
 }
 
 # ============================================================
@@ -668,11 +669,12 @@ resource "ibm_schematics_workspace" "ws6_testing" {
 }
 
 data "ibm_schematics_output" "ws6_testing" {
+  count        = var.read_ws_outputs ? 1 : 0
   workspace_id = ibm_schematics_workspace.ws6_testing.id
   template_id  = ibm_schematics_workspace.ws6_testing.runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws6_outputs = try(data.ibm_schematics_output.ws6_testing.output_values, {})
+  ws6_outputs = var.read_ws_outputs ? try(data.ibm_schematics_output.ws6_testing[0].output_values, {}) : {}
 }
