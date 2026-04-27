@@ -20,17 +20,21 @@ def parse_tfvars(path):
             elif re.match(r'^-?\d+(\.\d+)?$', raw):
                 entry = {"name": name, "value": raw, "type": "number"}
             else:
-                entry = {"name": name, "value": raw.strip('"')}
+                entry = {"name": name, "value": raw.strip('"'), "type": "string"}
             if name in SECURE_VARS:
                 entry["secure"] = True
             variables.append(entry)
     return variables
 
+variables = parse_tfvars("terraform.tfvars")
+location       = next((v["value"] for v in variables if v["name"] == "ibmcloud_schematics_region"), "ca-tor")
+resource_group = next((v["value"] for v in variables if v["name"] == "ibmcloud_resource_group"), "default")
+
 workspace = {
     "name": "bnk-23-orchestration",
     "type": ["terraform_v1.5"],
-    "location": "ca-tor",
-    "resource_group": "default",
+    "location": location,
+    "resource_group": resource_group,
     "template_repo": {
         "url": "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3",
         "branch": "main"
@@ -38,7 +42,7 @@ workspace = {
     "template_data": [{
         "folder": ".",
         "type": "terraform_v1.5",
-        "variablestore": parse_tfvars("terraform.tfvars")
+        "variablestore": variables
     }]
 }
 

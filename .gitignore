@@ -1,0 +1,9 @@
+# Terraform variable files (contain sensitive API keys and passwords)
+terraform.tfvars
+
+# IBM Cloud CLI Schematics input variable files (contain sensitive API keys)
+ibmcloud_cli_input_variables.json
+workspace.json
+
+# Lifecycle test output (reports contain outputs that may include sensitive values)
+test-reports/

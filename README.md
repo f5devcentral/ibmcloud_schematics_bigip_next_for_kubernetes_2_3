@@ -199,12 +199,84 @@ By default each workspace pulls from the corresponding `f5devcentral` GitHub rep
 
 ## IBM Cloud CLI Deployment
 
-See [IBMCLOUD_CLI.md](./IBMCLOUD_CLI.md) for full instructions on using the IBM Cloud CLI to:
+See [IBMCLOUD_CLI.md](./IBMCLOUD_CLI.md) for full instructions. The workflow below covers the common path: generating `workspace.json`, creating the workspace, and running plan / apply / destroy.
 
-- Generate `workspace.json` from `terraform.tfvars` using `tfvars_to_schematics_input_json.py`
-- Create the orchestration workspace
-- Trigger plan, apply, and destroy
-- Update variables and stream job logs
+### 1. Install the Schematics plugin
+
+```bash
+ibmcloud plugin install schematics
+```
+
+### 2. Prepare variables and generate workspace.json
+
+Copy the example tfvars, fill in at minimum `ibmcloud_api_key` and `testing_ssh_key_name`, then generate `workspace.json`:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars
+python3 tfvars_to_schematics_input_json.py
+# workspace.json written
+```
+
+### 3. Create the workspace
+
+`workspace.json` must include the repo URL and variable store. Example:
+
+```json
+{
+  "name": "bnk-23-orchestration",
+  "type": ["terraform_v1.5"],
+  "location": "ca-tor",
+  "description": "BIG-IP Next for Kubernetes 2.3 orchestration workspace",
+  "template_repo": {
+    "url": "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3",
+    "branch": "main"
+  },
+  "resource_group": "default",
+  "template_data": [{
+    "folder": ".",
+    "type": "terraform_v1.5",
+    "variablestore": []
+  }]
+}
+```
+
+The `variablestore` array is populated automatically when you generate `workspace.json` via `tfvars_to_schematics_input_json.py`. Create the workspace:
+
+```bash
+ibmcloud schematics workspace new --file workspace.json
+```
+
+The output includes the workspace ID (e.g. `ca-tor.workspace.bnk-23-orchestration.xxxxxxxx`). Export it:
+
+```bash
+export WS_ID="ca-tor.workspace.bnk-23-orchestration.xxxxxxxx"
+```
+
+### 4. Plan
+
+```bash
+ibmcloud schematics plan --id $WS_ID
+ibmcloud schematics logs --id $WS_ID --act-id <activity-id>
+```
+
+### 5. Apply
+
+```bash
+ibmcloud schematics apply --id $WS_ID --force
+ibmcloud schematics logs --id $WS_ID --act-id <activity-id>
+ibmcloud schematics output --id $WS_ID
+```
+
+### 6. Destroy
+
+Destroy triggers the reverse teardown (ws6 → ws1) via `null_resource` destroy provisioners, then removes the orchestration workspace itself:
+
+```bash
+ibmcloud schematics destroy --id $WS_ID --force
+ibmcloud schematics logs --id $WS_ID --act-id <activity-id>
+ibmcloud schematics workspace delete --id $WS_ID --force
+```
 
 ---
 
@@ -327,13 +399,13 @@ Key outputs include:
 
 | Output | Description |
 |--------|-------------|
-| `ws1_openshift_cluster_name` | Name of the ROKS cluster |
-| `ws1_openshift_cluster_public_endpoint` | Public API endpoint |
-| `ws1_roks_transit_gateway_name` | Name of the Transit Gateway |
-| `ws3_flo_trusted_profile_id` | IBM IAM Trusted Profile ID |
-| `ws3_flo_pod_deployment_status` | FLO pod readiness status |
-| `ws4_cneinstance_pod_deployment_status` | CNEInstance pod readiness status |
-| `ws5_license_id` | Name of the License custom resource |
-| `ws6_testing_tgw_jumphost_public_ip` | Floating IP of the TGW jumphost |
-| `ws6_testing_tgw_jumphost_ssh_command` | SSH command to connect to the TGW jumphost |
-| `ws6_testing_cluster_jumphost_ssh_commands` | SSH commands for per-zone cluster jumphosts |
+| `roks_openshift_cluster_name` | Name of the ROKS cluster |
+| `roks_openshift_cluster_public_endpoint` | Public API endpoint |
+| `roks_transit_gateway_name` | Name of the Transit Gateway |
+| `ibmcloud_trusted_profile_id` | IBM IAM Trusted Profile ID |
+| `flo_deloyment_status` | FLO pod readiness status |
+| `cneinstance_deployment_status` | CNEInstance pod readiness status |
+| `bnk_license_id` | Name of the License custom resource |
+| `test_jumphost_public_ip` | Floating IP of the TGW jumphost |
+| `test_jumphost_ssh_command` | SSH command to connect to the TGW jumphost |
+| `cluster_vpc_jumphosts_ssh_commands` | SSH commands for per-zone cluster jumphosts |

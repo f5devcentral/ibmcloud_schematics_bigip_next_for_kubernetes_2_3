@@ -30,12 +30,12 @@ output "ws1_openshift_cluster_id" {
   value       = try(local.ws1_outputs["openshift_cluster_id"], null)
 }
 
-output "ws1_openshift_cluster_name" {
+output "roks_openshift_cluster_name" {
   description = "Name of the OpenShift cluster"
   value       = try(local.ws1_outputs["openshift_cluster_name"], null)
 }
 
-output "ws1_openshift_cluster_public_endpoint" {
+output "roks_openshift_cluster_public_endpoint" {
   description = "Public endpoint URL for the OpenShift cluster"
   value       = try(local.ws1_outputs["openshift_cluster_public_endpoint"], null)
 }
@@ -105,7 +105,7 @@ output "ws1_roks_transit_gateway_id" {
   value       = try(local.ws1_outputs["roks_transit_gateway_id"], null)
 }
 
-output "ws1_roks_transit_gateway_name" {
+output "roks_transit_gateway_name" {
   description = "Name of the Transit Gateway"
   value       = try(local.ws1_outputs["roks_transit_gateway_name"], null)
 }
@@ -165,12 +165,12 @@ output "ws3_flo_extracted_flo_version" {
   value       = var.deploy_bnk ? try(local.ws3_outputs["flo_extracted_flo_version"], null) : null
 }
 
-output "ws3_flo_trusted_profile_id" {
+output "ibmcloud_trusted_profile_id" {
   description = "IBM IAM Trusted Profile ID created for the CNE controller service account"
   value       = var.deploy_bnk ? try(local.ws3_outputs["flo_trusted_profile_id"], null) : null
 }
 
-output "ws3_flo_pod_deployment_status" {
+output "flo_deloyment_status" {
   description = "FLO pod deployment status"
   value       = var.deploy_bnk ? try(local.ws3_outputs["flo_pod_deployment_status"], null) : null
 }
@@ -200,7 +200,7 @@ output "ws4_cneinstance_namespace" {
   value       = var.deploy_bnk ? try(local.ws4_outputs["cneinstance_namespace"], null) : null
 }
 
-output "ws4_cneinstance_pod_deployment_status" {
+output "cneinstance_deployment_status" {
   description = "Pod deployment status after CNEInstance readiness validation"
   value       = var.deploy_bnk ? try(local.ws4_outputs["cneinstance_pod_deployment_status"], null) : null
 }
@@ -210,7 +210,7 @@ output "ws4_cneinstance_pod_deployment_status" {
 # WS5 — License (null when deploy_bnk = false)
 # ============================================================
 
-output "ws5_license_id" {
+output "bnk_license_id" {
   description = "Name of the License custom resource"
   value       = var.deploy_bnk ? try(local.ws5_outputs["license_id"], null) : null
 }
@@ -266,12 +266,12 @@ output "ws6_testing_tgw_jumphost_private_ip" {
   value       = try(local.ws6_outputs["testing_tgw_jumphost_private_ip"], null)
 }
 
-output "ws6_testing_tgw_jumphost_public_ip" {
+output "test_jumphost_public_ip" {
   description = "Floating (public) IP of the TGW jumphost"
   value       = try(local.ws6_outputs["testing_tgw_jumphost_public_ip"], null)
 }
 
-output "ws6_testing_tgw_jumphost_ssh_command" {
+output "test_jumphost_ssh_command" {
   description = "SSH command to connect to the TGW jumphost"
   value       = try(local.ws6_outputs["testing_tgw_jumphost_ssh_command"], null)
 }
@@ -306,7 +306,7 @@ output "ws6_testing_cluster_jumphost_public_ips" {
   value       = try(local.ws6_outputs["testing_cluster_jumphost_public_ips"], null)
 }
 
-output "ws6_testing_cluster_jumphost_ssh_commands" {
+output "cluster_vpc_jumphosts_ssh_commands" {
   description = "Map of zone to SSH command for cluster jumphosts"
   value       = try(local.ws6_outputs["testing_cluster_jumphost_ssh_commands"], null)
 }

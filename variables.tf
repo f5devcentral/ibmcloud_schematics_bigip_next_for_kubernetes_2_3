@@ -30,10 +30,22 @@ variable "roks_cluster_template_repo_url" {
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18"
 }
 
+variable "roks_cluster_template_repo_branch" {
+  description = "GitHub branch for the ws1 ROKS cluster workspace template"
+  type        = string
+  default     = "main"
+}
+
 variable "cert_manager_template_repo_url" {
   description = "GitHub URL for the ws2 cert-manager workspace template"
   type        = string
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager"
+}
+
+variable "cert_manager_template_repo_branch" {
+  description = "GitHub branch for the ws2 cert-manager workspace template"
+  type        = string
+  default     = "main"
 }
 
 variable "flo_template_repo_url" {
@@ -42,10 +54,22 @@ variable "flo_template_repo_url" {
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo"
 }
 
+variable "flo_template_repo_branch" {
+  description = "GitHub branch for the ws3 FLO workspace template"
+  type        = string
+  default     = "main"
+}
+
 variable "cneinstance_template_repo_url" {
   description = "GitHub URL for the ws4 CNEInstance workspace template"
   type        = string
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance"
+}
+
+variable "cneinstance_template_repo_branch" {
+  description = "GitHub branch for the ws4 CNEInstance workspace template"
+  type        = string
+  default     = "main"
 }
 
 variable "license_template_repo_url" {
@@ -54,10 +78,22 @@ variable "license_template_repo_url" {
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_license"
 }
 
+variable "license_template_repo_branch" {
+  description = "GitHub branch for the ws5 License workspace template"
+  type        = string
+  default     = "main"
+}
+
 variable "testing_template_repo_url" {
   description = "GitHub URL for the ws6 Testing workspace template"
   type        = string
   default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_testing"
+}
+
+variable "testing_template_repo_branch" {
+  description = "GitHub branch for the ws6 Testing workspace template"
+  type        = string
+  default     = "main"
 }
 
 
