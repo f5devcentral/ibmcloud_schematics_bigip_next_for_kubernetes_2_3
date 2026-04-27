@@ -33,31 +33,100 @@ resource "ibm_schematics_workspace" "ws1_roks_cluster" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.roks_cluster_template_repo_url
     branch = var.roks_cluster_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",                  value = var.ibmcloud_api_key,                           secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region",           value = var.ibmcloud_cluster_region,                    secure = false, type = "string" },
-      { name = "ibmcloud_resource_group",           value = var.ibmcloud_resource_group,                    secure = false, type = "string" },
-      { name = "create_roks_cluster",               value = tostring(var.create_roks_cluster),               secure = false, type = "bool" },
-      { name = "create_roks_transit_gateway",       value = tostring(var.create_roks_transit_gateway),       secure = false, type = "bool" },
-      { name = "create_roks_registry_cos_instance", value = tostring(var.create_roks_registry_cos_instance), secure = false, type = "bool" },
-      { name = "roks_cluster_vpc_name",             value = var.roks_cluster_vpc_name,                      secure = false, type = "string" },
-      { name = "openshift_cluster_name",            value = var.openshift_cluster_name,                     secure = false, type = "string" },
-      { name = "openshift_cluster_version",         value = var.openshift_cluster_version,                  secure = false, type = "string" },
-      { name = "roks_workers_per_zone",             value = tostring(var.roks_workers_per_zone),             secure = false, type = "number" },
-      { name = "roks_min_worker_vcpu_count",        value = tostring(var.roks_min_worker_vcpu_count),        secure = false, type = "number" },
-      { name = "roks_min_worker_memory_gb",         value = tostring(var.roks_min_worker_memory_gb),         secure = false, type = "number" },
-      { name = "roks_cos_instance_name",            value = var.roks_cos_instance_name,                     secure = false, type = "string" },
-      { name = "roks_transit_gateway_name",         value = var.roks_transit_gateway_name,                  secure = false, type = "string" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "create_roks_cluster"
+      value  = tostring(var.create_roks_cluster)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "create_roks_transit_gateway"
+      value  = tostring(var.create_roks_transit_gateway)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "create_roks_registry_cos_instance"
+      value  = tostring(var.create_roks_registry_cos_instance)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "roks_cluster_vpc_name"
+      value  = var.roks_cluster_vpc_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "openshift_cluster_name"
+      value  = var.openshift_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "openshift_cluster_version"
+      value  = var.openshift_cluster_version
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_workers_per_zone"
+      value  = tostring(var.roks_workers_per_zone)
+      secure = false
+      type   = "number"
+    }
+    variablestore {
+      name   = "roks_min_worker_vcpu_count"
+      value  = tostring(var.roks_min_worker_vcpu_count)
+      secure = false
+      type   = "number"
+    }
+    variablestore {
+      name   = "roks_min_worker_memory_gb"
+      value  = tostring(var.roks_min_worker_memory_gb)
+      secure = false
+      type   = "number"
+    }
+    variablestore {
+      name   = "roks_cos_instance_name"
+      value  = var.roks_cos_instance_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_transit_gateway_name"
+      value  = var.roks_transit_gateway_name
+      secure = false
+      type   = "string"
+    }
+  }
 }
 
 data "ibm_schematics_output" "ws1_roks_cluster" {
@@ -89,23 +158,52 @@ resource "ibm_schematics_workspace" "ws2_cert_manager" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.cert_manager_template_repo_url
     branch = var.cert_manager_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",        value = var.ibmcloud_api_key,        secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region", value = var.ibmcloud_cluster_region, secure = false, type = "string" },
-      { name = "ibmcloud_resource_group", value = var.ibmcloud_resource_group, secure = false, type = "string" },
-      { name = "roks_cluster_name_or_id", value = local.ws1_roks_cluster_name, secure = false, type = "string" },
-      { name = "cert_manager_namespace",  value = var.cert_manager_namespace,  secure = false, type = "string" },
-      { name = "cert_manager_version",    value = var.cert_manager_version,    secure = false, type = "string" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_cluster_name_or_id"
+      value  = local.ws1_roks_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cert_manager_namespace"
+      value  = var.cert_manager_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cert_manager_version"
+      value  = var.cert_manager_version
+      secure = false
+      type   = "string"
+    }
+  }
 
   depends_on = [ibm_schematics_workspace.ws1_roks_cluster]
 }
@@ -136,35 +234,124 @@ resource "ibm_schematics_workspace" "ws3_flo" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.flo_template_repo_url
     branch = var.flo_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",               value = var.ibmcloud_api_key,               secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region",        value = var.ibmcloud_cluster_region,        secure = false, type = "string" },
-      { name = "ibmcloud_resource_group",        value = var.ibmcloud_resource_group,        secure = false, type = "string" },
-      { name = "roks_cluster_name_or_id",        value = local.ws1_roks_cluster_name,        secure = false, type = "string" },
-      { name = "cert_manager_namespace",         value = var.cert_manager_namespace,         secure = false, type = "string" },
-      { name = "far_repo_url",                   value = var.far_repo_url,                   secure = false, type = "string" },
-      { name = "f5_bigip_k8s_manifest_version",  value = var.f5_bigip_k8s_manifest_version,  secure = false, type = "string" },
-      { name = "use_cos_bucket",                 value = "true",                             secure = false, type = "bool" },
-      { name = "ibmcloud_cos_bucket_region",     value = var.ibmcloud_cos_bucket_region,     secure = false, type = "string" },
-      { name = "ibmcloud_cos_instance_name",     value = var.ibmcloud_cos_instance_name,     secure = false, type = "string" },
-      { name = "ibmcloud_resources_cos_bucket",  value = var.ibmcloud_resources_cos_bucket,  secure = false, type = "string" },
-      { name = "f5_cne_far_auth_file",           value = var.f5_cne_far_auth_file,           secure = false, type = "string" },
-      { name = "f5_cne_subscription_jwt_file",   value = var.f5_cne_subscription_jwt_file,   secure = false, type = "string" },
-      { name = "flo_namespace",                  value = var.flo_namespace,                  secure = false, type = "string" },
-      { name = "flo_utils_namespace",            value = var.flo_utils_namespace,            secure = false, type = "string" },
-      { name = "bigip_username",                 value = var.bigip_username,                 secure = false, type = "string" },
-      { name = "bigip_password",                 value = var.bigip_password,                 secure = true,  type = "string" },
-      { name = "bigip_url",                      value = var.bigip_url,                      secure = false, type = "string" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_cluster_name_or_id"
+      value  = local.ws1_roks_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cert_manager_namespace"
+      value  = var.cert_manager_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "far_repo_url"
+      value  = var.far_repo_url
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "f5_bigip_k8s_manifest_version"
+      value  = var.f5_bigip_k8s_manifest_version
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "use_cos_bucket"
+      value  = "true"
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "ibmcloud_cos_bucket_region"
+      value  = var.ibmcloud_cos_bucket_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cos_instance_name"
+      value  = var.ibmcloud_cos_instance_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resources_cos_bucket"
+      value  = var.ibmcloud_resources_cos_bucket
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "f5_cne_far_auth_file"
+      value  = var.f5_cne_far_auth_file
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "f5_cne_subscription_jwt_file"
+      value  = var.f5_cne_subscription_jwt_file
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_namespace"
+      value  = var.flo_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_utils_namespace"
+      value  = var.flo_utils_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "bigip_username"
+      value  = var.bigip_username
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "bigip_password"
+      value  = var.bigip_password
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "bigip_url"
+      value  = var.bigip_url
+      secure = false
+      type   = "string"
+    }
+  }
 
   depends_on = [ibm_schematics_workspace.ws2_cert_manager]
 }
@@ -183,10 +370,10 @@ locals {
   }
 
   # Downstream wiring from ws3
-  ws3_flo_namespace               = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
-  ws3_flo_trusted_profile_id      = try(local.ws3_outputs["flo_trusted_profile_id"], "")
-  ws3_flo_cluster_issuer_name     = try(local.ws3_outputs["flo_cluster_issuer_name"], "")
-  ws3_cneinstance_network_attachments = try(
+  ws3_flo_namespace                    = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
+  ws3_flo_trusted_profile_id           = try(local.ws3_outputs["flo_trusted_profile_id"], "")
+  ws3_flo_cluster_issuer_name          = try(local.ws3_outputs["flo_cluster_issuer_name"], "")
+  ws3_cneinstance_network_attachments  = try(
     jsondecode(local.ws3_outputs["cneinstance_network_attachments"]),
     ["ens3-ipvlan-l2", "macvlan-conf"]
   )
@@ -204,30 +391,94 @@ resource "ibm_schematics_workspace" "ws4_cneinstance" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.cneinstance_template_repo_url
     branch = var.cneinstance_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",                 value = var.ibmcloud_api_key,                              secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region",          value = var.ibmcloud_cluster_region,                       secure = false, type = "string" },
-      { name = "ibmcloud_resource_group",          value = var.ibmcloud_resource_group,                       secure = false, type = "string" },
-      { name = "roks_cluster_name_or_id",          value = local.ws1_roks_cluster_name,                       secure = false, type = "string" },
-      { name = "far_repo_url",                     value = var.far_repo_url,                                  secure = false, type = "string" },
-      { name = "flo_namespace",                    value = local.ws3_flo_namespace,                           secure = false, type = "string" },
-      { name = "flo_utils_namespace",              value = var.flo_utils_namespace,                           secure = false, type = "string" },
-      { name = "f5_bigip_k8s_manifest_version",   value = var.f5_bigip_k8s_manifest_version,                 secure = false, type = "string" },
-      { name = "flo_trusted_profile_id",           value = local.ws3_flo_trusted_profile_id,                  secure = false, type = "string" },
-      { name = "flo_cluster_issuer_name",          value = local.ws3_flo_cluster_issuer_name,                 secure = false, type = "string" },
-      { name = "cneinstance_deployment_size",      value = var.cneinstance_deployment_size,                   secure = false, type = "string" },
-      { name = "cneinstance_gslb_datacenter_name", value = var.cneinstance_gslb_datacenter_name,              secure = false, type = "string" },
-      { name = "cneinstance_network_attachments",  value = jsonencode(local.ws3_cneinstance_network_attachments), secure = false, type = "list(string)" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_cluster_name_or_id"
+      value  = local.ws1_roks_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "far_repo_url"
+      value  = var.far_repo_url
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_namespace"
+      value  = local.ws3_flo_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_utils_namespace"
+      value  = var.flo_utils_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "f5_bigip_k8s_manifest_version"
+      value  = var.f5_bigip_k8s_manifest_version
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_trusted_profile_id"
+      value  = local.ws3_flo_trusted_profile_id
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_cluster_issuer_name"
+      value  = local.ws3_flo_cluster_issuer_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cneinstance_deployment_size"
+      value  = var.cneinstance_deployment_size
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cneinstance_gslb_datacenter_name"
+      value  = var.cneinstance_gslb_datacenter_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "cneinstance_network_attachments"
+      value  = jsonencode(local.ws3_cneinstance_network_attachments)
+      secure = false
+      type   = "list(string)"
+    }
+  }
 
   depends_on = [ibm_schematics_workspace.ws3_flo]
 }
@@ -258,27 +509,76 @@ resource "ibm_schematics_workspace" "ws5_license" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.license_template_repo_url
     branch = var.license_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",             value = var.ibmcloud_api_key,             secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region",      value = var.ibmcloud_cluster_region,      secure = false, type = "string" },
-      { name = "ibmcloud_resource_group",      value = var.ibmcloud_resource_group,      secure = false, type = "string" },
-      { name = "ibmcloud_cos_bucket_region",   value = var.ibmcloud_cos_bucket_region,   secure = false, type = "string" },
-      { name = "ibmcloud_cos_instance_name",   value = var.ibmcloud_cos_instance_name,   secure = false, type = "string" },
-      { name = "ibmcloud_resources_cos_bucket", value = var.ibmcloud_resources_cos_bucket, secure = false, type = "string" },
-      { name = "roks_cluster_name_or_id",      value = local.ws1_roks_cluster_name,      secure = false, type = "string" },
-      { name = "flo_utils_namespace",          value = var.flo_utils_namespace,          secure = false, type = "string" },
-      { name = "f5_cne_subscription_jwt_file", value = var.f5_cne_subscription_jwt_file, secure = false, type = "string" },
-      { name = "license_mode",                 value = var.license_mode,                 secure = false, type = "string" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cos_bucket_region"
+      value  = var.ibmcloud_cos_bucket_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cos_instance_name"
+      value  = var.ibmcloud_cos_instance_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resources_cos_bucket"
+      value  = var.ibmcloud_resources_cos_bucket
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_cluster_name_or_id"
+      value  = local.ws1_roks_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "flo_utils_namespace"
+      value  = var.flo_utils_namespace
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "f5_cne_subscription_jwt_file"
+      value  = var.f5_cne_subscription_jwt_file
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "license_mode"
+      value  = var.license_mode
+      secure = false
+      type   = "string"
+    }
+  }
 
   depends_on = [ibm_schematics_workspace.ws4_cneinstance]
 }
@@ -308,33 +608,112 @@ resource "ibm_schematics_workspace" "ws6_testing" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_repo {
     url    = var.testing_template_repo_url
     branch = var.testing_template_repo_branch
-  }]
+  }
 
-  template_data = [{
+  template_data {
     folder = "."
     type   = "terraform_v1.5"
-    variablestore = [
-      { name = "ibmcloud_api_key",                     value = var.ibmcloud_api_key,                           secure = true,  type = "string" },
-      { name = "ibmcloud_cluster_region",              value = var.ibmcloud_cluster_region,                    secure = false, type = "string" },
-      { name = "ibmcloud_resource_group",              value = var.ibmcloud_resource_group,                    secure = false, type = "string" },
-      { name = "roks_cluster_name_or_id",              value = local.ws1_roks_cluster_name,                    secure = false, type = "string" },
-      { name = "testing_transit_gateway_name",         value = local.ws1_transit_gateway_name,                 secure = false, type = "string" },
-      { name = "testing_create_tgw_jumphost",          value = tostring(var.testing_create_tgw_jumphost),       secure = false, type = "bool" },
-      { name = "testing_create_cluster_jumphosts",     value = tostring(var.testing_create_cluster_jumphosts),  secure = false, type = "bool" },
-      { name = "testing_ssh_key_name",                 value = var.testing_ssh_key_name,                       secure = false, type = "string" },
-      { name = "testing_jumphost_profile",             value = var.testing_jumphost_profile,                   secure = false, type = "string" },
-      { name = "testing_min_vcpu_count",               value = tostring(var.testing_min_vcpu_count),            secure = false, type = "number" },
-      { name = "testing_min_memory_gb",                value = tostring(var.testing_min_memory_gb),             secure = false, type = "number" },
-      { name = "testing_create_client_vpc",            value = tostring(var.testing_create_client_vpc),         secure = false, type = "bool" },
-      { name = "testing_client_vpc_name",              value = var.testing_client_vpc_name,                    secure = false, type = "string" },
-      { name = "testing_client_vpc_region",            value = var.testing_client_vpc_region,                  secure = false, type = "string" },
-      { name = "testing_tgw_jumphost_name",            value = var.testing_tgw_jumphost_name,                  secure = false, type = "string" },
-      { name = "testing_cluster_jumphost_name_prefix", value = var.testing_cluster_jumphost_name_prefix,        secure = false, type = "string" },
-    ]
-  }]
+
+    variablestore {
+      name   = "ibmcloud_api_key"
+      value  = var.ibmcloud_api_key
+      secure = true
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_cluster_region"
+      value  = var.ibmcloud_cluster_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "ibmcloud_resource_group"
+      value  = var.ibmcloud_resource_group
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "roks_cluster_name_or_id"
+      value  = local.ws1_roks_cluster_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_transit_gateway_name"
+      value  = local.ws1_transit_gateway_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_create_tgw_jumphost"
+      value  = tostring(var.testing_create_tgw_jumphost)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "testing_create_cluster_jumphosts"
+      value  = tostring(var.testing_create_cluster_jumphosts)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "testing_ssh_key_name"
+      value  = var.testing_ssh_key_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_jumphost_profile"
+      value  = var.testing_jumphost_profile
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_min_vcpu_count"
+      value  = tostring(var.testing_min_vcpu_count)
+      secure = false
+      type   = "number"
+    }
+    variablestore {
+      name   = "testing_min_memory_gb"
+      value  = tostring(var.testing_min_memory_gb)
+      secure = false
+      type   = "number"
+    }
+    variablestore {
+      name   = "testing_create_client_vpc"
+      value  = tostring(var.testing_create_client_vpc)
+      secure = false
+      type   = "bool"
+    }
+    variablestore {
+      name   = "testing_client_vpc_name"
+      value  = var.testing_client_vpc_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_client_vpc_region"
+      value  = var.testing_client_vpc_region
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_tgw_jumphost_name"
+      value  = var.testing_tgw_jumphost_name
+      secure = false
+      type   = "string"
+    }
+    variablestore {
+      name   = "testing_cluster_jumphost_name_prefix"
+      value  = var.testing_cluster_jumphost_name_prefix
+      secure = false
+      type   = "string"
+    }
+  }
 
   depends_on = [ibm_schematics_workspace.ws5_license]
 }
