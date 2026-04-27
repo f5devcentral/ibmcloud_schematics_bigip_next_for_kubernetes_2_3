@@ -33,12 +33,9 @@ resource "ibm_schematics_workspace" "ws1_roks_cluster" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.roks_cluster_template_repo_url
     branch = var.roks_cluster_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
@@ -89,12 +86,9 @@ resource "ibm_schematics_workspace" "ws2_cert_manager" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.cert_manager_template_repo_url
     branch = var.cert_manager_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
@@ -136,12 +130,9 @@ resource "ibm_schematics_workspace" "ws3_flo" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.flo_template_repo_url
     branch = var.flo_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
@@ -204,12 +195,9 @@ resource "ibm_schematics_workspace" "ws4_cneinstance" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.cneinstance_template_repo_url
     branch = var.cneinstance_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
@@ -258,12 +246,9 @@ resource "ibm_schematics_workspace" "ws5_license" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.license_template_repo_url
     branch = var.license_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
@@ -308,12 +293,9 @@ resource "ibm_schematics_workspace" "ws6_testing" {
   resource_group = data.ibm_resource_group.rg.id
   template_type  = "terraform_v1.5"
 
-  template_repo = [{
+  template_ref = [{
     url    = var.testing_template_repo_url
     branch = var.testing_template_repo_branch
-  }]
-
-  template_data = [{
     folder = "."
     type   = "terraform_v1.5"
     variablestore = [
