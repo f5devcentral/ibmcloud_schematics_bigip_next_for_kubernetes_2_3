@@ -346,12 +346,14 @@ resource "null_resource" "destroy_ws6" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -359,12 +361,9 @@ resource "null_resource" "destroy_ws6" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
@@ -388,12 +387,14 @@ resource "null_resource" "destroy_ws5" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -401,12 +402,9 @@ resource "null_resource" "destroy_ws5" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
@@ -430,12 +428,14 @@ resource "null_resource" "destroy_ws4" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -443,12 +443,9 @@ resource "null_resource" "destroy_ws4" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
@@ -472,12 +469,14 @@ resource "null_resource" "destroy_ws3" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -485,12 +484,9 @@ resource "null_resource" "destroy_ws3" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
@@ -514,12 +510,14 @@ resource "null_resource" "destroy_ws2" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -527,12 +525,9 @@ resource "null_resource" "destroy_ws2" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
@@ -555,12 +550,14 @@ resource "null_resource" "destroy_ws1" {
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
         | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-      for i in $(seq 1 360); do
-        STATUS=$(curl -s \
+      ws_poll() {
+        curl -s \
           "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+          -H "Authorization: Bearer $TOKEN"
+      }
+      ws_locked() { ws_poll | grep -A5 '"workspace_status"' | grep -c '"locked" *: *true' || true; }
+      for i in $(seq 1 360); do
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
       curl -s -X PUT \
@@ -568,12 +565,9 @@ resource "null_resource" "destroy_ws1" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      sleep 15
       for i in $(seq 1 360); do
-        STATUS=$(curl -s \
-          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
-          -H "Authorization: Bearer $TOKEN" \
-          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        [ "$(ws_locked)" = "0" ] && break
         sleep 10
       done
     EOT
