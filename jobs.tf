@@ -1,100 +1,167 @@
 # ============================================================
 # Schematics Job Orchestration
 #
-# Plan jobs  : ws1 → ws2 → ws3 → ws4 → ws5 → ws6 (sequential)
-# Apply jobs : ws1 → ws2 → ws3 → ws4 → ws5 → ws6 (sequential)
-# Destroy    : driven by reverse depends_on order on workspace
-#              resources — ws6 → ws5 → ws4 → ws3 → ws2 → ws1
+# Plan jobs  : ws1 → ws2 → ws3 → ws4 → ws5 → ws6 (sequential triggers)
+# Apply jobs : ws1 → ws2 → ws3 → ws4 → ws5 → ws6 (sequential triggers)
+# Destroy    : driven by reverse depends_on order — ws6 → ws5 → ws4 → ws3 → ws2 → ws1
 #
-# Each job resource has a lifecycle.replace_triggered_by pointing
-# at its workspace so that re-applying the orchestrator re-runs
-# the jobs even if the workspace resource itself did not change.
+# Plan and apply are triggered via the IBM Schematics workspace v1 API
+# (POST /plan, PUT /apply) and fire-and-forget. Progress is visible in
+# the IBM Cloud Schematics console for each sub-workspace.
 # ============================================================
 
 # ============================================================
 # Plan jobs — ws1 → ws6
 # ============================================================
 
-resource "ibm_schematics_job" "plan_ws1" {
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws1_roks_cluster.id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
+resource "null_resource" "plan_ws1" {
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster.id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
 
   depends_on = [ibm_schematics_workspace.ws1_roks_cluster]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws1_roks_cluster]
-  }
 }
 
-resource "ibm_schematics_job" "plan_ws2" {
-  count             = var.install_cert_manager ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws2_cert_manager[0].id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.plan_ws1]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws2_cert_manager[0]]
+resource "null_resource" "plan_ws2" {
+  count = var.install_cert_manager ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws2_cert_manager[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws1]
 }
 
-resource "ibm_schematics_job" "plan_ws3" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws3_flo[0].id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.plan_ws2]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws3_flo[0]]
+resource "null_resource" "plan_ws3" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws3_flo[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws2]
 }
 
-resource "ibm_schematics_job" "plan_ws4" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws4_cneinstance[0].id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.plan_ws3]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws4_cneinstance[0]]
+resource "null_resource" "plan_ws4" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws4_cneinstance[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws3]
 }
 
-resource "ibm_schematics_job" "plan_ws5" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws5_license[0].id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.plan_ws4]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws5_license[0]]
+resource "null_resource" "plan_ws5" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws5_license[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws4]
 }
 
-resource "ibm_schematics_job" "plan_ws6" {
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws6_testing.id
-  command_name      = "workspace_plan"
-  location          = var.ibmcloud_schematics_region
+resource "null_resource" "plan_ws6" {
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws6_testing.id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
+  }
 
-  depends_on = [ibm_schematics_job.plan_ws5]
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X POST \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/plan" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws5]
 
   lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws6_testing]
-
     precondition {
       condition = (
         !var.testing_create_tgw_jumphost ||
@@ -107,99 +174,162 @@ resource "ibm_schematics_job" "plan_ws6" {
 }
 
 # ============================================================
-# Apply jobs — ws1 → ws6 (each waits for the previous apply)
+# Apply jobs — ws1 → ws6 (each waits for the previous apply trigger)
 # ============================================================
 
-resource "ibm_schematics_job" "apply_ws1" {
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws1_roks_cluster.id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.plan_ws6]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws1_roks_cluster]
+resource "null_resource" "apply_ws1" {
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster.id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.plan_ws6]
 }
 
-resource "ibm_schematics_job" "apply_ws2" {
-  count             = var.install_cert_manager ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws2_cert_manager[0].id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.apply_ws1]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws2_cert_manager[0]]
+resource "null_resource" "apply_ws2" {
+  count = var.install_cert_manager ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws2_cert_manager[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.apply_ws1]
 }
 
-resource "ibm_schematics_job" "apply_ws3" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws3_flo[0].id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.apply_ws2]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws3_flo[0]]
+resource "null_resource" "apply_ws3" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws3_flo[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.apply_ws2]
 }
 
-resource "ibm_schematics_job" "apply_ws4" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws4_cneinstance[0].id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.apply_ws3]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws4_cneinstance[0]]
+resource "null_resource" "apply_ws4" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws4_cneinstance[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.apply_ws3]
 }
 
-resource "ibm_schematics_job" "apply_ws5" {
-  count             = var.deploy_bnk ? 1 : 0
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws5_license[0].id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.apply_ws4]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws5_license[0]]
+resource "null_resource" "apply_ws5" {
+  count = var.deploy_bnk ? 1 : 0
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws5_license[0].id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.apply_ws4]
 }
 
-resource "ibm_schematics_job" "apply_ws6" {
-  command_object    = "workspace"
-  command_object_id = ibm_schematics_workspace.ws6_testing.id
-  command_name      = "workspace_apply"
-  location          = var.ibmcloud_schematics_region
-
-  depends_on = [ibm_schematics_job.apply_ws5]
-
-  lifecycle {
-    replace_triggered_by = [ibm_schematics_workspace.ws6_testing]
+resource "null_resource" "apply_ws6" {
+  triggers = {
+    workspace_id      = ibm_schematics_workspace.ws6_testing.id
+    schematics_region = var.ibmcloud_schematics_region
+    ibmcloud_api_key  = var.ibmcloud_api_key
   }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      TOKEN=$(curl -sf -X POST "https://iam.cloud.ibm.com/identity/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${self.triggers.ibmcloud_api_key}" \
+        | tr -d '\n' | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+      curl -s -X PUT \
+        "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}/apply" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' || true
+    EOT
+  }
+
+  depends_on = [null_resource.apply_ws5]
 }
 
 # ============================================================
 # Destroy jobs — ws6 → ws1 (reverse order)
 #
-# These jobs run workspace_destroy on each sub-workspace before
-# Terraform removes the ibm_schematics_workspace resource itself.
-# The destroy provisioner fires when the null_resource is destroyed,
-# which happens before the workspace resource it references because
-# each null_resource depends_on its workspace.
+# Destroy provisioners fire when the null_resource is destroyed,
+# before Terraform removes the ibm_schematics_workspace resource.
 # ============================================================
 
 resource "null_resource" "destroy_ws6" {
