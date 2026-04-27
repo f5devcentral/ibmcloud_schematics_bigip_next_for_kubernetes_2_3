@@ -351,6 +351,14 @@ resource "null_resource" "destroy_ws6" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
@@ -377,6 +385,14 @@ resource "null_resource" "destroy_ws5" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
@@ -403,6 +419,14 @@ resource "null_resource" "destroy_ws4" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
@@ -429,6 +453,14 @@ resource "null_resource" "destroy_ws3" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
@@ -455,6 +487,14 @@ resource "null_resource" "destroy_ws2" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
@@ -480,6 +520,14 @@ resource "null_resource" "destroy_ws1" {
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d '{}' || true
+      for i in $(seq 1 360); do
+        STATUS=$(curl -s \
+          "https://${self.triggers.schematics_region}.schematics.cloud.ibm.com/v1/workspaces/${self.triggers.workspace_id}" \
+          -H "Authorization: Bearer $TOKEN" \
+          | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ "$STATUS" = "INPROGRESS" ] || [ "$STATUS" = "STOPPING" ] || [ "$STATUS" = "CONNECTING" ] || break
+        sleep 10
+      done
     EOT
   }
 
