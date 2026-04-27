@@ -130,10 +130,7 @@ data "ibm_schematics_output" "ws1_roks_cluster" {
 }
 
 locals {
-  ws1_outputs = {
-    for item in try(data.ibm_schematics_output.ws1_roks_cluster.output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws1_outputs = try(data.ibm_schematics_output.ws1_roks_cluster.output_values, {})
 
   # Downstream wiring from ws1
   ws1_roks_cluster_name    = var.create_roks_cluster ? try(local.ws1_outputs["roks_cluster_name"], var.openshift_cluster_name) : var.roks_cluster_id_or_name
@@ -204,10 +201,7 @@ data "ibm_schematics_output" "ws2_cert_manager" {
 }
 
 locals {
-  ws2_outputs = {
-    for item in try(data.ibm_schematics_output.ws2_cert_manager[0].output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws2_outputs = try(data.ibm_schematics_output.ws2_cert_manager[0].output_values, {})
 }
 
 # ============================================================
@@ -346,10 +340,7 @@ data "ibm_schematics_output" "ws3_flo" {
 }
 
 locals {
-  ws3_outputs = {
-    for item in try(data.ibm_schematics_output.ws3_flo[0].output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws3_outputs = try(data.ibm_schematics_output.ws3_flo[0].output_values, {})
 
   # Downstream wiring from ws3
   ws3_flo_namespace                   = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
@@ -467,10 +458,7 @@ data "ibm_schematics_output" "ws4_cneinstance" {
 }
 
 locals {
-  ws4_outputs = {
-    for item in try(data.ibm_schematics_output.ws4_cneinstance[0].output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws4_outputs = try(data.ibm_schematics_output.ws4_cneinstance[0].output_values, {})
 }
 
 # ============================================================
@@ -561,10 +549,7 @@ data "ibm_schematics_output" "ws5_license" {
 }
 
 locals {
-  ws5_outputs = {
-    for item in try(data.ibm_schematics_output.ws5_license[0].output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws5_outputs = try(data.ibm_schematics_output.ws5_license[0].output_values, {})
 }
 
 # ============================================================
@@ -689,8 +674,5 @@ data "ibm_schematics_output" "ws6_testing" {
 }
 
 locals {
-  ws6_outputs = {
-    for item in try(data.ibm_schematics_output.ws6_testing.output_values[0].output_values, []) :
-    item.name => item.value
-  }
+  ws6_outputs = try(data.ibm_schematics_output.ws6_testing.output_values, {})
 }
