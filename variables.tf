@@ -3,7 +3,7 @@
 # F5 BIG-IP Next for Kubernetes 2.3 — Orchestration Workspace
 #
 # Variable sourcing per workspace:
-#   ws1 - Build a ROKs cluster - ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18
+#   ws1 - Build a ROKs cluster - ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4
 #   ws2 - Install Community cert-manager in ROKs cluster - ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager
 #   ws3 - Install F5 Lifecycle Operator in ROKs cluster - ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo
 #   ws4 - Create a BIG-IP Next for Kubernetes CNEInstance as a Gateway API Class provider - ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance
@@ -27,7 +27,7 @@
 variable "roks_cluster_template_repo_url" {
   description = "GitHub URL for the ws1 ROKS cluster workspace template"
   type        = string
-  default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18"
+  default     = "https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4"
 }
 
 variable "roks_cluster_template_repo_branch" {

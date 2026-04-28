@@ -2,18 +2,29 @@
 """
 BIG-IP Next for Kubernetes 2.3 — Schematics Lifecycle Test Runner
 
-Reads terraform.tfvars, creates a timestamped orchestration workspace,
-runs plan → apply → destroy → delete, captures logs and outputs, and
-writes a report to both the console and ./test-reports/.
+Full lifecycle test:
+  1. Create orchestration workspace
+  2. Plan orchestration workspace  (validate HCL)
+  3. Apply orchestration workspace (create ws1–ws6 sub-workspaces)
+  4. For each sub-workspace ws1 → ws6 (interleaved, stop chain on first failure):
+       a. Plan  wsN  — downstream workspaces depend on upstream applied resources
+       b. Apply wsN
+  5. Destroy ws6 → ws1 (reverse, skips workspaces never applied)
+  6. Destroy orchestration workspace (runs when=destroy provisioners)
+  7. Delete  orchestration workspace
+
+Note on interleaved plan→apply ordering:
+  Downstream workspaces (ws2 cert-manager, ws3 FLO, etc.) have data sources that
+  look up the ROKS cluster by name.  Those data sources are evaluated during plan,
+  so ws2 plan can only succeed AFTER ws1 apply has created the cluster.  Running all
+  plans before any apply (plan-all → apply-all) would cause ws2–ws6 plans to fail
+  with "cluster not found".  The interleaved order ensures each workspace's
+  dependencies exist before its plan runs.
 
 Usage:
     python3 test_lifecycle.py [path/to/terraform.tfvars] [--branch BRANCH]
 
     --branch BRANCH   GitHub branch to test (default: main)
-
-Examples:
-    python3 test_lifecycle.py
-    python3 test_lifecycle.py terraform.tfvars --branch my-feature-branch
 
 Prerequisites:
     ibmcloud CLI installed and logged in:
@@ -37,16 +48,38 @@ TFVARS_DEFAULT = "terraform.tfvars"
 WS_JSON_PATH   = "workspace.json"
 REPORT_DIR     = Path("test-reports")
 
-POLL_INTERVAL = 30     # seconds between status polls when no log stream
-JOB_TIMEOUT   = 10800  # 3 h max per phase (ROKS cluster creation is slow)
-READY_TIMEOUT = 180    # seconds to wait for workspace to leave CONNECTING
+POLL_INTERVAL = 30      # seconds between status polls
+JOB_TIMEOUT   = 18000   # 300 min max per sub-workspace phase
+ORCH_TIMEOUT  = 10800   # 3 h max for orchestration workspace operations
+READY_TIMEOUT = 300     # seconds to wait for workspace to leave CONNECTING
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
 # Workspace status values that mean a job finished
 TERMINAL_STATUSES = {"INACTIVE", "ACTIVE", "FAILED", "STOPPED", "DRAFT"}
 
-# Outputs printed in the report (in order)
+# Ordered list of selectable lifecycle phases (also the default run order)
+VALID_PHASES = [
+    "create",        # create orchestration workspace
+    "plan-orch",     # plan orchestration workspace
+    "apply-orch",    # apply orchestration workspace (creates sub-workspaces)
+    "sub-ws",        # plan then apply each sub-workspace ws1→ws6
+    "destroy-sub",   # destroy sub-workspaces ws6→ws1
+    "destroy-orch",  # destroy orchestration workspace
+    "delete",        # delete orchestration workspace record
+]
+
+# Sub-workspace definitions: (slot, fixed-name-in-main.tf, controlling-tfvar-or-None)
+SUB_WORKSPACE_DEFS = [
+    (1, "bnk-23-roks-cluster", "create_roks_cluster"),
+    (2, "bnk-23-cert-manager",  "install_cert_manager"),
+    (3, "bnk-23-flo",           "deploy_bnk"),
+    (4, "bnk-23-cneinstance",   "deploy_bnk"),
+    (5, "bnk-23-license",       "deploy_bnk"),
+    (6, "bnk-23-testing",       None),
+]
+
+# Outputs printed in the report (from orchestration workspace)
 KEY_OUTPUTS = [
     "roks_openshift_cluster_name",
     "roks_openshift_cluster_public_endpoint",
@@ -60,23 +93,16 @@ KEY_OUTPUTS = [
     "cluster_vpc_jumphosts_ssh_commands",
 ]
 
+
 # ── Low-level helpers ─────────────────────────────────────────────────────────
 
 def tee(msg, lf=None):
-    """Print to console and optionally to an open log file."""
     print(msg, flush=True)
     if lf:
         print(msg, file=lf, flush=True)
 
 
 def run_cmd(cmd, lf=None, stream=False):
-    """
-    Run a shell command.
-
-    stream=False (default): capture stdout/stderr, return (rc, stdout, stderr).
-    stream=True:            stream stdout+stderr live to console and lf,
-                            return (rc, combined_output, "").
-    """
     if not stream:
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         return r.returncode, r.stdout, r.stderr
@@ -97,7 +123,6 @@ def run_cmd(cmd, lf=None, stream=False):
 
 
 def ibmcloud_json(cmd, lf=None):
-    """Run an ibmcloud command, append --output json, return parsed dict/list."""
     rc, out, err = run_cmd(f"{cmd} --output json")
     if lf and out.strip():
         print(out, file=lf, flush=True)
@@ -160,7 +185,6 @@ def build_workspace_json(variables, ts_label, branch="main"):
 # ── Schematics polling ────────────────────────────────────────────────────────
 
 def get_ws_info(ws_id):
-    """Return (status, locked) for the workspace, or ('UNKNOWN', True) on error."""
     try:
         data   = ibmcloud_json(f"ibmcloud schematics workspace get --id {ws_id}")
         status = data.get("status") or data.get("workspace_status_msg", {}).get("status_code") or "UNKNOWN"
@@ -171,17 +195,11 @@ def get_ws_info(ws_id):
 
 
 def get_ws_status(ws_id):
-    """Return current workspace status string."""
     status, _ = get_ws_info(ws_id)
     return status
 
 
 def wait_for_workspace_ready(ws_id, lf, timeout=READY_TIMEOUT):
-    """
-    After workspace creation Schematics locks the workspace while it scans
-    the template repo.  Poll until status is INACTIVE (scan done) and the
-    workspace is no longer locked.  Returns the final status string.
-    """
     start = time.time()
     while True:
         elapsed = int(time.time() - start)
@@ -202,11 +220,6 @@ def wait_for_workspace_ready(ws_id, lf, timeout=READY_TIMEOUT):
 
 
 def poll_until_terminal(ws_id, label, lf, timeout=JOB_TIMEOUT):
-    """
-    Poll workspace status every POLL_INTERVAL seconds until it reaches a
-    terminal state.  Used when log streaming is unavailable.
-    Returns (final_status, elapsed_seconds).
-    """
     start = time.time()
     while True:
         elapsed = int(time.time() - start)
@@ -222,66 +235,40 @@ def poll_until_terminal(ws_id, label, lf, timeout=JOB_TIMEOUT):
         time.sleep(POLL_INTERVAL)
 
 
-def settle_status(ws_id, lf, timeout=120):
-    """
-    Short poll used immediately after log streaming ends, to let the
-    workspace status catch up.  Returns final status string.
-    """
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        status = get_ws_status(ws_id)
-        if status in TERMINAL_STATUSES:
-            return status
-        time.sleep(10)
-    return get_ws_status(ws_id)
-
-
 def stream_logs(ws_id, act_id, lf):
-    """Stream Schematics activity logs; blocks until the activity ends."""
     run_cmd(
         f"ibmcloud schematics logs --id {ws_id} --act-id {act_id}",
         lf=lf, stream=True,
     )
 
 
-def run_job(cmd, ws_id, label, lf, success_statuses, max_lock_retries=6):
+def run_job(cmd, ws_id, label, lf, success_statuses, timeout=JOB_TIMEOUT):
     """
-    Execute a Schematics job command (plan / apply / destroy), wait for
-    completion, fetch the final logs, and return (pass_bool, final_status,
-    duration).
-
-    `ibmcloud schematics logs` exits as soon as the current log buffer is
-    drained — it does NOT tail/follow.  We therefore:
-      1. Snapshot the workspace status before submitting the job so we can
-         detect when the new activity has actually changed the state.
-      2. After submitting, wait up to 120 s for the workspace status to
-         diverge from the pre-job snapshot (proving the activity started).
-      3. Poll until a new terminal status is reached.
-      4. Fetch the complete logs once the activity is done.
-
-    Retries up to max_lock_retries times on 409 workspace-locked responses,
-    waiting 30 s longer each attempt.
+    Submit a Schematics job (plan / apply / destroy), wait for completion,
+    stream the final logs, and return (passed, final_status, elapsed_seconds).
+    Retries on 409 workspace-locked responses for up to `timeout` seconds
+    (the same budget used for polling), so a long-running prior job (e.g.
+    a 60-minute roks_cluster apply) does not cause the submission to give up.
     """
-    # Snapshot status before the job so we can detect real state changes later.
     pre_status = get_ws_status(ws_id)
+    lock_deadline = time.time() + timeout
+    attempt = 0
 
-    for attempt in range(1, max_lock_retries + 1):
+    while True:
+        attempt += 1
         rc, out, err = run_cmd(f"{cmd} --output json")
         combined = (out + err).lower()
         if rc == 0:
             break
-        if "409" in combined or "temporarily locked" in combined:
-            wait = attempt * 30
-            tee(f"  Workspace locked (409) — retrying in {wait}s "
-                f"(attempt {attempt}/{max_lock_retries})", lf)
-            time.sleep(wait)
+        if ("409" in combined or "temporarily locked" in combined) and time.time() < lock_deadline:
+            remaining = int(lock_deadline - time.time())
+            tee(f"  Workspace locked (409) — retrying in 30s "
+                f"(attempt {attempt}, {remaining}s remaining in budget)", lf)
+            time.sleep(30)
             continue
-        # Non-retriable error
         if out.strip():
             print(out, file=lf, flush=True)
         raise RuntimeError((err or out).strip())
-    else:
-        raise RuntimeError(f"Workspace still locked after {max_lock_retries} retries: {cmd}")
 
     if out.strip():
         print(out, file=lf, flush=True)
@@ -297,8 +284,6 @@ def run_job(cmd, ws_id, label, lf, success_statuses, max_lock_retries=6):
 
     t0 = time.time()
     if act_id:
-        # Wait for the workspace status to leave the pre-job state, confirming
-        # the activity has been picked up and is changing workspace state.
         tee("  Waiting for activity to start...", lf)
         t_transition = time.time()
         while time.time() - t_transition < 120:
@@ -307,23 +292,36 @@ def run_job(cmd, ws_id, label, lf, success_statuses, max_lock_retries=6):
             time.sleep(5)
 
         tee("  Polling until activity completes...", lf)
-        final_status, _ = poll_until_terminal(ws_id, label, lf)
+        final_status, _ = poll_until_terminal(ws_id, label, lf, timeout=timeout)
 
-        # Fetch complete logs now that the activity is finished.
         tee("  Fetching final logs...", lf)
         stream_logs(ws_id, act_id, lf)
         tee("", lf)
     else:
         tee("  No activity ID returned — polling workspace status...", lf)
-        final_status, _ = poll_until_terminal(ws_id, label, lf)
+        final_status, _ = poll_until_terminal(ws_id, label, lf, timeout=timeout)
 
     elapsed = int(time.time() - t0)
     passed  = final_status in success_statuses
     return passed, final_status, elapsed
 
 
+def find_subworkspace_ids(sub_workspaces, lf):
+    """List all Schematics workspaces and match by name into sub_workspaces[].id."""
+    try:
+        data    = ibmcloud_json("ibmcloud schematics workspace list", lf)
+        ws_list = data.get("workspaces", []) if isinstance(data, dict) else (data or [])
+        name_to_id = {w.get("name"): w.get("id") for w in ws_list if w.get("name")}
+        for sw in sub_workspaces:
+            if sw["enabled"]:
+                sw["id"] = name_to_id.get(sw["name"])
+                found = sw["id"] or "NOT FOUND"
+                tee(f"  ws{sw['slot']} {sw['name']}: {found}", lf)
+    except Exception as exc:
+        tee(f"  WARNING: workspace list failed: {exc}", lf)
+
+
 def fetch_outputs(ws_id, lf):
-    """Return workspace outputs as {name: value}."""
     try:
         data  = ibmcloud_json(f"ibmcloud schematics output --id {ws_id}", lf)
         items = data if isinstance(data, list) else [data]
@@ -359,17 +357,17 @@ def render_report(started_at, ws_id, ws_name, phases, outputs, overall):
         sep,
         "  BIG-IP Next for Kubernetes 2.3 — Schematics Lifecycle Test Report",
         sep,
-        f"  Started        {started_at.strftime('%Y-%m-%d %H:%M:%S UTC')}",
-        f"  Workspace      {ws_name or 'not created'}",
-        f"  Workspace ID   {ws_id   or 'not created'}",
-        f"  Result         {overall}",
-        f"  Total time     {elapsed}s  ({elapsed / 60:.1f} min)",
+        f"  Started              {started_at.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        f"  Orchestration WS     {ws_name or 'not created'}",
+        f"  Orchestration WS ID  {ws_id   or 'not created'}",
+        f"  Result               {overall}",
+        f"  Total time           {elapsed}s  ({elapsed / 60:.1f} min)",
         thn,
-        f"  {'Phase':<24} {'Result':<10} {'Duration':>10}",
+        f"  {'Phase':<28} {'Result':<8} {'Duration':>10}",
         thn,
     ]
     for p in phases:
-        lines.append(f"  {p.name:<24} {p.status:<10} {p.duration:>8}s")
+        lines.append(f"  {p.name:<28} {p.status:<8} {p.duration:>8}s")
         if p.error:
             lines.append(f"    !! {p.error}")
 
@@ -393,63 +391,274 @@ def render_report(started_at, ws_id, ws_name, phases, outputs, overall):
     return "\n".join(lines)
 
 
+# ── Workspace tree ────────────────────────────────────────────────────────────
+
+def show_workspace_tree(tfvars_path):
+    """Print orchestration and sub-workspace IDs / statuses from the account."""
+    W   = 72
+    sep = "=" * W
+    thn = "─" * (W - 4)
+
+    try:
+        variables = parse_tfvars(tfvars_path)
+    except Exception as exc:
+        print(f"ERROR: could not parse {tfvars_path}: {exc}")
+        return 1
+
+    var_map = {v["name"]: v["value"] for v in variables}
+    region  = var_map.get("ibmcloud_schematics_region", "us-south")
+
+    def _enabled(ctrl_var):
+        if not ctrl_var:
+            return True
+        v = var_map.get(ctrl_var, "true")
+        return v.lower() not in ("false", "0", "no")
+
+    print(f"\n{sep}")
+    print(f"  BIG-IP Next for Kubernetes 2.3 — Workspace Tree")
+    print(f"  Schematics region : {region}")
+    print(f"  tfvars            : {tfvars_path}")
+    print(sep)
+
+    rc, out, err = run_cmd("ibmcloud schematics workspace list --output json")
+    if rc != 0:
+        print(f"\n  ERROR: workspace list failed:\n  {(err or out).strip()}\n{sep}\n")
+        return 1
+    try:
+        data    = json.loads(out)
+        ws_list = data.get("workspaces", []) if isinstance(data, dict) else (data or [])
+    except json.JSONDecodeError as exc:
+        print(f"\n  ERROR: could not parse workspace list JSON: {exc}\n{sep}\n")
+        return 1
+
+    # Build name → [{id, status}, ...] — multiple runs can leave duplicate names
+    by_name: dict = {}
+    for w in ws_list:
+        name = w.get("name") or ""
+        if not name:
+            continue
+        status = (
+            w.get("status")
+            or w.get("workspace_status_msg", {}).get("status_code")
+            or "UNKNOWN"
+        )
+        by_name.setdefault(name, []).append({"id": w.get("id", ""), "status": status})
+
+    # ── Orchestration workspaces ───────────────────────────────────────────
+    orch_prefix = "bnk-23-test-"
+    orch_rows   = sorted(
+        [
+            (name, entry)
+            for name, entries in by_name.items()
+            for entry in entries
+            if name.startswith(orch_prefix)
+        ],
+        key=lambda x: x[0],
+        reverse=True,   # newest timestamp first
+    )
+
+    print(f"\n  Orchestration workspaces  (prefix: {orch_prefix}*)")
+    print(f"  {thn}")
+    if orch_rows:
+        for name, entry in orch_rows:
+            print(f"  {entry['status']:<10}  {name:<42}  {entry['id']}")
+    else:
+        print("  (none found)")
+
+    # ── Sub-workspaces ─────────────────────────────────────────────────────
+    print(f"\n  Sub-workspaces")
+    print(f"  {thn}")
+    for slot, ws_name, ctrl_var in SUB_WORKSPACE_DEFS:
+        tag     = "" if _enabled(ctrl_var) else "  [disabled in tfvars]"
+        matches = by_name.get(ws_name, [])
+        label   = f"  ws{slot}  {ws_name:<28}"
+        if matches:
+            first = matches[0]
+            print(f"{label}  {first['status']:<10}  {first['id']}{tag}")
+            for dup in matches[1:]:
+                print(f"  {'':>3}  {'(duplicate)':<28}  {dup['status']:<10}  {dup['id']}")
+        else:
+            print(f"{label}  (not found){tag}")
+
+    print(f"\n{sep}\n")
+    return 0
+
+
+def show_outputs(ws_id):
+    """Print all output variables for the given orchestration workspace."""
+    W   = 72
+    sep = "=" * W
+    thn = "-" * W
+    print(f"\n{sep}")
+    print(f"  BIG-IP Next for Kubernetes 2.3 — Orchestration Workspace Outputs")
+    print(f"  WS ID : {ws_id}")
+    print(sep)
+
+    try:
+        data  = ibmcloud_json(f"ibmcloud schematics output --id {ws_id}")
+        items = data if isinstance(data, list) else [data]
+        outputs = {}
+        for template in items:
+            for item in template.get("output_values", []):
+                outputs[item["name"]] = item.get("value", "")
+    except Exception as exc:
+        print(f"\n  ERROR: could not fetch outputs: {exc}\n{sep}\n")
+        return 1
+
+    if not outputs:
+        print("\n  (no outputs — workspace may not be applied yet)")
+        print(f"\n{sep}\n")
+        return 0
+
+    # Print KEY_OUTPUTS first, then any extras
+    print(f"\n  {thn}")
+    printed = set()
+    for key in KEY_OUTPUTS:
+        val = outputs.get(key)
+        if val is not None:
+            print(f"  {key}")
+            print(f"    {val}")
+            printed.add(key)
+    extras = {k: v for k, v in outputs.items() if k not in printed}
+    if extras:
+        if printed:
+            print(f"  {thn}")
+        for k, v in extras.items():
+            print(f"  {k}")
+            print(f"    {v}")
+    print(f"\n{sep}\n")
+    return 0
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Schematics lifecycle test runner")
+    parser = argparse.ArgumentParser(
+        description="Schematics lifecycle test runner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "phases (in execution order):\n"
+            "  create       create orchestration workspace\n"
+            "  plan-orch    plan orchestration workspace\n"
+            "  apply-orch   apply orchestration workspace (creates sub-workspaces)\n"
+            "  sub-ws       plan then apply each sub-workspace ws1→ws6\n"
+            "  destroy-sub  destroy sub-workspaces ws6→ws1\n"
+            "  destroy-orch destroy orchestration workspace\n"
+            "  delete       delete orchestration workspace record\n"
+            "\nexamples:\n"
+            "  # full lifecycle (default)\n"
+            "  python3 test_lifecycle.py ./terraform.tfvars\n"
+            "\n"
+            "  # create + plan + apply only, no destroy\n"
+            "  python3 test_lifecycle.py ./terraform.tfvars \\\n"
+            "      --phases create plan-orch apply-orch sub-ws\n"
+            "\n"
+            "  # destroy an already-applied workspace by ID\n"
+            "  python3 test_lifecycle.py ./terraform.tfvars \\\n"
+            "      --ws-id us-south.workspace.bnk-23-test-xxx.abc123 \\\n"
+            "      --phases destroy-sub destroy-orch delete\n"
+        ),
+    )
     parser.add_argument("tfvars", nargs="?", default=TFVARS_DEFAULT,
                         help="Path to terraform.tfvars (default: %(default)s)")
     parser.add_argument("--branch", default="main",
                         help="GitHub branch to test (default: %(default)s)")
+    parser.add_argument(
+        "--phases", nargs="+", default=VALID_PHASES,
+        choices=VALID_PHASES, metavar="PHASE",
+        help=(
+            "One or more phases to run (default: all). "
+            "Choices: " + " ".join(VALID_PHASES)
+        ),
+    )
+    parser.add_argument(
+        "--ws-id", default=None, dest="ws_id", metavar="WS_ID",
+        help="Existing orchestration workspace ID — required when 'create' is not in --phases",
+    )
+    parser.add_argument(
+        "--list", action="store_true",
+        help="Display workspace tree (orchestration + sub-workspaces) and exit",
+    )
+    parser.add_argument(
+        "--outputs", action="store_true",
+        help="Print orchestration workspace output variables and exit (requires --ws-id)",
+    )
     args = parser.parse_args()
+
+    if args.list:
+        return show_workspace_tree(args.tfvars)
+
+    if args.outputs:
+        if not args.ws_id:
+            print(
+                "ERROR: --ws-id is required with --outputs\n"
+                "       Use --list to find the orchestration workspace ID."
+            )
+            return 1
+        return show_outputs(args.ws_id)
 
     tfvars_path = args.tfvars
     branch      = args.branch
+    run         = set(args.phases)
     REPORT_DIR.mkdir(exist_ok=True)
+
+    # Validate: --ws-id required when 'create' is skipped but later phases need the workspace
+    needs_ws = run & {"plan-orch", "apply-orch", "sub-ws", "destroy-sub", "destroy-orch", "delete"}
+    if "create" not in run and needs_ws and not args.ws_id:
+        print(
+            "ERROR: --ws-id is required when 'create' is not in --phases\n"
+            "       e.g. --ws-id us-south.workspace.bnk-23-test-xxx.abc123"
+        )
+        return 1
 
     ts_label    = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     report_path = REPORT_DIR / f"lifecycle_{ts_label}.txt"
     log_path    = REPORT_DIR / f"lifecycle_{ts_label}_logs.txt"
 
-    started_at = datetime.now(timezone.utc)
-    ws_id      = None
-    ws_name    = None
-    phases     = []
-    outputs    = {}
-    overall    = "FAIL"
+    started_at     = datetime.now(timezone.utc)
+    orch_ws_id     = args.ws_id or None
+    orch_ws_name   = None
+    sub_workspaces = []   # [{slot, name, label, id, enabled}, ...]
+    phases         = []
+    outputs        = {}
+    overall        = "FAIL"
 
     W = 72
 
-    def section(title):
-        bar = "─" * W
-        msg = f"\n{bar}\n  {title}\n{bar}"
-        tee(msg, lf)
-
-    def cleanup():
-        """Best-effort destroy + delete on interrupt or early exit."""
-        if not ws_id:
-            return
-        tee(f"\n  Cleanup: destroying workspace {ws_id} ...", lf)
-        run_cmd(f"ibmcloud schematics destroy --id {ws_id} --force", lf=lf, stream=True)
-        poll_until_terminal(ws_id, "cleanup-destroy", lf, timeout=3600)
-        tee(f"  Cleanup: deleting workspace {ws_id} ...", lf)
-        run_cmd(f"ibmcloud schematics workspace delete --id {ws_id} --force", lf=lf)
+    # Sentinel phases used for dependency checks when a phase is not in `run`.
+    # Status "SKIP" means "not selected — do not treat as failure".
+    p_plan_orch  = Phase("plan orch");  p_plan_orch.status  = "SKIP"
+    p_apply_orch = Phase("apply orch"); p_apply_orch.status = "SKIP"
 
     with open(log_path, "w") as lf:
 
-        # Register Ctrl-C handler after lf is open
+        def section(title):
+            bar = "─" * W
+            tee(f"\n{bar}\n  {title}\n{bar}", lf)
+
+        def cleanup():
+            if not orch_ws_id:
+                return
+            tee(f"\n  Cleanup: destroying orchestration workspace {orch_ws_id} ...", lf)
+            run_cmd(f"ibmcloud schematics destroy --id {orch_ws_id} --force",
+                    lf=lf, stream=True)
+            poll_until_terminal(orch_ws_id, "cleanup-destroy", lf, timeout=ORCH_TIMEOUT)
+            tee(f"  Cleanup: deleting orchestration workspace {orch_ws_id} ...", lf)
+            run_cmd(f"ibmcloud schematics workspace delete --id {orch_ws_id} --force", lf=lf)
+
         def _sigint(sig, frame):
             tee("\n\nInterrupted by user — running cleanup...", lf)
             cleanup()
-            report = render_report(started_at, ws_id, ws_name, phases, outputs, "INTERRUPTED")
+            report = render_report(started_at, orch_ws_id, orch_ws_name,
+                                   phases, outputs, "INTERRUPTED")
             tee(report, lf)
             report_path.write_text(report)
             sys.exit(130)
 
         signal.signal(signal.SIGINT, _sigint)
 
-        # ── Pre-flight ────────────────────────────────────────────────
+        # ── Pre-flight (always) ───────────────────────────────────────────
         section("PRE-FLIGHT — Check ibmcloud CLI login")
         p = Phase("preflight")
         t0 = time.time()
@@ -467,14 +676,12 @@ def main():
             tee(f"  ERROR: {exc}", lf)
         p.duration = int(time.time() - t0)
         phases.append(p)
-
         if p.status != "PASS":
-            report = render_report(started_at, ws_id, ws_name, phases, outputs, "FAIL")
-            tee(report, lf)
-            report_path.write_text(report)
+            report = render_report(started_at, orch_ws_id, orch_ws_name, phases, outputs, "FAIL")
+            tee(report, lf); report_path.write_text(report)
             return 1
 
-        # ── Setup ─────────────────────────────────────────────────────
+        # ── Setup (always) ────────────────────────────────────────────────
         section("SETUP — Parse terraform.tfvars → workspace.json")
         p = Phase("setup")
         t0 = time.time()
@@ -484,15 +691,45 @@ def main():
                     f"{tfvars_path} not found — "
                     "copy terraform.tfvars.example and fill in your values"
                 )
-            variables = parse_tfvars(tfvars_path)
-            ws        = build_workspace_json(variables, ts_label, branch=branch)
-            ws_name   = ws["name"]
+            variables    = parse_tfvars(tfvars_path)
+            ws           = build_workspace_json(variables, ts_label, branch=branch)
+            orch_ws_name = ws["name"]
+
+            # If an existing workspace ID was supplied, resolve its name for the report
+            if orch_ws_id:
+                try:
+                    d = ibmcloud_json(f"ibmcloud schematics workspace get --id {orch_ws_id}", lf)
+                    orch_ws_name = d.get("name", orch_ws_id)
+                except Exception:
+                    orch_ws_name = orch_ws_id
+
+            var_map = {v["name"]: v["value"] for v in variables}
+
+            def bool_var(name, default=True):
+                v = var_map.get(name, "true" if default else "false")
+                return v.lower() not in ("false", "0", "no")
+
+            for slot, ws_name, ctrl_var in SUB_WORKSPACE_DEFS:
+                enabled = bool_var(ctrl_var) if ctrl_var else True
+                short   = ws_name.replace("bnk-23-", "")
+                sub_workspaces.append({
+                    "slot":    slot,
+                    "name":    ws_name,
+                    "label":   f"ws{slot} {short}",
+                    "id":      None,
+                    "enabled": enabled,
+                })
+
             tee(f"  {len(variables)} variables parsed from {tfvars_path}", lf)
-            tee(f"  workspace name  : {ws['name']}", lf)
-            tee(f"  branch          : {branch}", lf)
-            tee(f"  location        : {ws['location']}", lf)
-            tee(f"  resource_group  : {ws['resource_group']}", lf)
-            tee(f"  workspace.json  : written", lf)
+            tee(f"  Orchestration workspace : {orch_ws_name}", lf)
+            tee(f"  Branch                  : {branch}", lf)
+            tee(f"  Location                : {ws['location']}", lf)
+            tee(f"  Phases selected         : {' '.join(p for p in VALID_PHASES if p in run)}", lf)
+            if orch_ws_id:
+                tee(f"  Workspace ID (--ws-id)  : {orch_ws_id}", lf)
+            for sw in sub_workspaces:
+                state = "enabled" if sw["enabled"] else "disabled"
+                tee(f"  ws{sw['slot']} {sw['name']:<26} {state}", lf)
             p.status = "PASS"
         except Exception as exc:
             p.status = "FAIL"
@@ -500,166 +737,299 @@ def main():
             tee(f"  ERROR: {exc}", lf)
         p.duration = int(time.time() - t0)
         phases.append(p)
-
         if p.status != "PASS":
-            report = render_report(started_at, ws_id, ws_name, phases, outputs, "FAIL")
-            tee(report, lf)
-            report_path.write_text(report)
+            report = render_report(started_at, orch_ws_id, orch_ws_name, phases, outputs, "FAIL")
+            tee(report, lf); report_path.write_text(report)
             return 1
 
-        # ── Phase 1: Create ───────────────────────────────────────────
-        section("PHASE 1 — Create workspace")
-        p = Phase("create")
-        t0 = time.time()
-        try:
-            rc, out, err = run_cmd(
-                f"ibmcloud schematics workspace new --file {WS_JSON_PATH} --output json"
-            )
-            if out.strip():
-                print(out, file=lf, flush=True)
-            if rc != 0:
-                raise RuntimeError((err or out).strip())
-            data  = json.loads(out)
-            ws_id = data.get("id") or data.get("workspace_id")
-            if not ws_id:
-                raise RuntimeError(f"workspace ID not in response: {out[:300]}")
-            tee(f"  Workspace ID : {ws_id}", lf)
+        # ── Phase: create ─────────────────────────────────────────────────
+        if "create" in run:
+            section("PHASE — Create orchestration workspace")
+            p = Phase("create")
+            t0 = time.time()
+            try:
+                rc, out, err = run_cmd(
+                    f"ibmcloud schematics workspace new --file {WS_JSON_PATH} --output json"
+                )
+                if out.strip():
+                    print(out, file=lf, flush=True)
+                if rc != 0:
+                    raise RuntimeError((err or out).strip())
+                data = json.loads(out)
+                orch_ws_id = data.get("id") or data.get("workspace_id")
+                if not orch_ws_id:
+                    raise RuntimeError(f"workspace ID not in response: {out[:300]}")
+                tee(f"  Workspace ID : {orch_ws_id}", lf)
+                tee("  Waiting for workspace to become ready...", lf)
+                status = wait_for_workspace_ready(orch_ws_id, lf)
+                tee(f"  Ready status : {status}", lf)
+                p.status = "PASS"
+            except Exception as exc:
+                p.status = "FAIL"
+                p.error  = str(exc)
+                tee(f"  ERROR: {exc}", lf)
+            p.duration = int(time.time() - t0)
+            phases.append(p)
+            if p.status != "PASS":
+                report = render_report(started_at, orch_ws_id, orch_ws_name, phases, outputs, "FAIL")
+                tee(report, lf); report_path.write_text(report)
+                return 1
 
-            # Wait for Schematics to finish scanning the repo and release the lock
-            tee("  Waiting for workspace to become ready...", lf)
-            status = wait_for_workspace_ready(ws_id, lf)
-            tee(f"  Ready status : {status}", lf)
-            p.status = "PASS"
-        except Exception as exc:
-            p.status = "FAIL"
-            p.error  = str(exc)
-            tee(f"  ERROR: {exc}", lf)
-        p.duration = int(time.time() - t0)
-        phases.append(p)
-
-        if p.status != "PASS":
-            report = render_report(started_at, ws_id, ws_name, phases, outputs, "FAIL")
-            tee(report, lf)
-            report_path.write_text(report)
-            return 1
-
-        # ── Phase 2: Plan ─────────────────────────────────────────────
-        section("PHASE 2 — Plan")
-        p = Phase("plan")
-        t0 = time.time()
-        try:
-            passed, final_status, elapsed = run_job(
-                cmd             = f"ibmcloud schematics plan --id {ws_id}",
-                ws_id           = ws_id,
-                label           = "plan",
-                lf              = lf,
-                success_statuses= {"INACTIVE", "ACTIVE"},
-            )
-            tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-            p.status = "PASS" if passed else "FAIL"
-            if not passed:
-                p.error = f"workspace status after plan: {final_status}"
-        except Exception as exc:
-            p.status = "FAIL"
-            p.error  = str(exc)
-            tee(f"  ERROR: {exc}", lf)
-        p.duration = int(time.time() - t0)
-        phases.append(p)
-
-        # ── Phase 3: Apply ────────────────────────────────────────────
-        p_apply = Phase("apply")
-        if p.status == "PASS":
-            section("PHASE 3 — Apply")
+        # ── Phase: plan-orch ──────────────────────────────────────────────
+        if "plan-orch" in run:
+            section("PHASE — Plan orchestration workspace")
             t0 = time.time()
             try:
                 passed, final_status, elapsed = run_job(
-                    cmd             = f"ibmcloud schematics apply --id {ws_id} --force",
-                    ws_id           = ws_id,
-                    label           = "apply",
+                    cmd             = f"ibmcloud schematics plan --id {orch_ws_id}",
+                    ws_id           = orch_ws_id,
+                    label           = "plan-orch",
                     lf              = lf,
-                    success_statuses= {"ACTIVE"},
+                    success_statuses= {"INACTIVE", "ACTIVE"},
+                    timeout         = ORCH_TIMEOUT,
                 )
                 tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-                p_apply.status = "PASS" if passed else "FAIL"
+                p_plan_orch.status = "PASS" if passed else "FAIL"
                 if not passed:
-                    p_apply.error = f"workspace status after apply: {final_status}"
+                    p_plan_orch.error = f"status after plan: {final_status}"
             except Exception as exc:
-                p_apply.status = "FAIL"
-                p_apply.error  = str(exc)
+                p_plan_orch.status = "FAIL"
+                p_plan_orch.error  = str(exc)
                 tee(f"  ERROR: {exc}", lf)
-            p_apply.duration = int(time.time() - t0)
+            p_plan_orch.duration = int(time.time() - t0)
+            phases.append(p_plan_orch)
 
-            if p_apply.status == "PASS":
-                section("Outputs")
-                outputs = fetch_outputs(ws_id, lf)
-                if outputs:
-                    for key in KEY_OUTPUTS:
-                        val = outputs.get(key)
-                        if val is not None:
-                            tee(f"  {key}", lf)
-                            tee(f"    {val}", lf)
+        # ── Phase: apply-orch ─────────────────────────────────────────────
+        if "apply-orch" in run:
+            if p_plan_orch.status == "FAIL":
+                p_apply_orch.status = "SKIP"
+                p_apply_orch.error  = "skipped — orchestration plan failed"
+                phases.append(p_apply_orch)
+            else:
+                section("PHASE — Apply orchestration workspace (create sub-workspaces)")
+                t0 = time.time()
+                try:
+                    passed, final_status, elapsed = run_job(
+                        cmd             = f"ibmcloud schematics apply --id {orch_ws_id} --force",
+                        ws_id           = orch_ws_id,
+                        label           = "apply-orch",
+                        lf              = lf,
+                        success_statuses= {"ACTIVE"},
+                        timeout         = ORCH_TIMEOUT,
+                    )
+                    tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                    p_apply_orch.status = "PASS" if passed else "FAIL"
+                    if not passed:
+                        p_apply_orch.error = f"status after apply: {final_status}"
+                except Exception as exc:
+                    p_apply_orch.status = "FAIL"
+                    p_apply_orch.error  = str(exc)
+                    tee(f"  ERROR: {exc}", lf)
+                p_apply_orch.duration = int(time.time() - t0)
+                phases.append(p_apply_orch)
+
+        # ── Discover sub-workspace IDs ────────────────────────────────────
+        if run & {"sub-ws", "destroy-sub"}:
+            section("Discover sub-workspace IDs")
+            find_subworkspace_ids(sub_workspaces, lf)
+
+        # ── Phase: sub-ws (plan→apply ws1→ws6, interleaved) ──────────────
+        # Downstream workspaces have data sources that look up the ROKS cluster
+        # by name; those are evaluated at plan time, so each workspace must be
+        # fully applied before the next workspace is planned.
+        if "sub-ws" in run:
+            # SKIP means the phase was not selected — not a failure; allow sub-ws to proceed.
+            proceed = p_apply_orch.status in {"PASS", "SKIP"}
+
+            for sw in sub_workspaces:
+                enabled = sw["enabled"]
+                ws_id   = sw["id"]
+
+                # ── Plan ──────────────────────────────────────────────────
+                p_plan = Phase(f"plan {sw['label']}")
+
+                if not enabled:
+                    p_plan.status = "SKIP"
+                    p_plan.error  = "disabled (controlling variable is false)"
+                elif not proceed:
+                    p_plan.status = "SKIP"
+                    p_plan.error  = "skipped — previous workspace failed"
+                elif not ws_id:
+                    p_plan.status = "FAIL"
+                    p_plan.error  = f"{sw['name']} not found after orchestration apply"
+                    proceed = False
                 else:
-                    tee("  (no outputs returned)", lf)
-        else:
-            p_apply.status = "SKIP"
-            p_apply.error  = "skipped — plan failed"
-        phases.append(p_apply)
+                    section(f"PLAN — ws{sw['slot']} {sw['name']}")
+                    t0 = time.time()
+                    try:
+                        passed, final_status, elapsed = run_job(
+                            cmd             = f"ibmcloud schematics plan --id {ws_id}",
+                            ws_id           = ws_id,
+                            label           = f"plan-ws{sw['slot']}",
+                            lf              = lf,
+                            success_statuses= {"INACTIVE", "ACTIVE"},
+                            timeout         = JOB_TIMEOUT,
+                        )
+                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                        p_plan.status = "PASS" if passed else "FAIL"
+                        if not passed:
+                            p_plan.error = f"status after plan: {final_status}"
+                            proceed = False
+                    except Exception as exc:
+                        p_plan.status = "FAIL"
+                        p_plan.error  = str(exc)
+                        proceed = False
+                        tee(f"  ERROR: {exc}", lf)
+                    p_plan.duration = int(time.time() - t0)
 
-        # ── Phase 4: Destroy ──────────────────────────────────────────
-        section("PHASE 4 — Destroy")
-        p = Phase("destroy")
-        t0 = time.time()
-        try:
-            passed, final_status, elapsed = run_job(
-                cmd             = f"ibmcloud schematics destroy --id {ws_id} --force",
-                ws_id           = ws_id,
-                label           = "destroy",
-                lf              = lf,
-                success_statuses= {"INACTIVE", "DRAFT"},
-            )
-            tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-            p.status = "PASS" if passed else "FAIL"
-            if not passed:
-                p.error = f"workspace status after destroy: {final_status}"
-        except Exception as exc:
-            p.status = "FAIL"
-            p.error  = str(exc)
-            tee(f"  ERROR: {exc}", lf)
-        p.duration = int(time.time() - t0)
-        phases.append(p)
+                phases.append(p_plan)
 
-        # ── Phase 5: Delete workspace ─────────────────────────────────
-        section("PHASE 5 — Delete workspace")
-        p = Phase("delete")
-        t0 = time.time()
-        try:
-            rc, out, err = run_cmd(
-                f"ibmcloud schematics workspace delete --id {ws_id} --force",
-                lf=lf,
-            )
-            if out.strip():
-                print(out, file=lf, flush=True)
-            if rc != 0:
-                raise RuntimeError((err or out).strip())
-            tee(f"  Workspace {ws_id} deleted", lf)
-            p.status = "PASS"
-        except Exception as exc:
-            p.status = "FAIL"
-            p.error  = str(exc)
-            tee(f"  ERROR: {exc}", lf)
-            tee(
-                f"  Manual cleanup required:\n"
-                f"    ibmcloud schematics workspace delete --id {ws_id} --force",
-                lf,
-            )
-        p.duration = int(time.time() - t0)
-        phases.append(p)
+                # ── Apply ──────────────────────────────────────────────────
+                p_apply = Phase(f"apply {sw['label']}")
 
-        # ── Final result ──────────────────────────────────────────────
+                if not enabled:
+                    p_apply.status = "SKIP"
+                    p_apply.error  = "disabled"
+                elif p_plan.status != "PASS":
+                    p_apply.status = "SKIP"
+                    p_apply.error  = "skipped — plan did not pass"
+                elif not proceed:
+                    p_apply.status = "SKIP"
+                    p_apply.error  = "skipped — previous workspace failed"
+                else:
+                    section(f"APPLY — ws{sw['slot']} {sw['name']}")
+                    t0 = time.time()
+                    try:
+                        passed, final_status, elapsed = run_job(
+                            cmd             = f"ibmcloud schematics apply --id {ws_id} --force",
+                            ws_id           = ws_id,
+                            label           = f"apply-ws{sw['slot']}",
+                            lf              = lf,
+                            success_statuses= {"ACTIVE"},
+                            timeout         = JOB_TIMEOUT,
+                        )
+                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                        p_apply.status = "PASS" if passed else "FAIL"
+                        if not passed:
+                            p_apply.error = f"status after apply: {final_status}"
+                            proceed = False
+                    except Exception as exc:
+                        p_apply.status = "FAIL"
+                        p_apply.error  = str(exc)
+                        proceed = False
+                        tee(f"  ERROR: {exc}", lf)
+                    p_apply.duration = int(time.time() - t0)
+
+                phases.append(p_apply)
+
+        # ── Phase: destroy-sub (ws6→ws1) ──────────────────────────────────
+        # Skip workspaces that are INACTIVE/DRAFT — they were never applied
+        # and have no managed state.  Attempting destroy on an unapplied
+        # workspace causes Terraform refresh to fail on data sources (e.g.
+        # cluster lookup) even though the state is empty.
+        if "destroy-sub" in run:
+            for sw in reversed(sub_workspaces):
+                p = Phase(f"destroy {sw['label']}")
+
+                if not sw["enabled"]:
+                    p.status = "SKIP"
+                    p.error  = "disabled"
+                    phases.append(p)
+                    continue
+
+                if not sw["id"]:
+                    p.status = "SKIP"
+                    p.error  = f"{sw['name']} not found — nothing to destroy"
+                    phases.append(p)
+                    continue
+
+                pre_status = get_ws_status(sw["id"])
+                if pre_status in {"INACTIVE", "DRAFT"}:
+                    tee(f"  Skipping destroy of ws{sw['slot']} — status={pre_status} (no managed state)", lf)
+                    p.status = "SKIP"
+                    p.error  = f"no managed state (status={pre_status})"
+                    phases.append(p)
+                    continue
+
+                section(f"DESTROY — ws{sw['slot']} {sw['name']}")
+                t0 = time.time()
+                try:
+                    passed, final_status, elapsed = run_job(
+                        cmd             = f"ibmcloud schematics destroy --id {sw['id']} --force",
+                        ws_id           = sw["id"],
+                        label           = f"destroy-ws{sw['slot']}",
+                        lf              = lf,
+                        success_statuses= {"INACTIVE", "DRAFT"},
+                        timeout         = JOB_TIMEOUT,
+                    )
+                    tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                    p.status = "PASS" if passed else "FAIL"
+                    if not passed:
+                        p.error = f"status after destroy: {final_status}"
+                except Exception as exc:
+                    p.status = "FAIL"
+                    p.error  = str(exc)
+                    tee(f"  ERROR: {exc}", lf)
+                p.duration = int(time.time() - t0)
+                phases.append(p)
+
+        # ── Phase: destroy-orch ───────────────────────────────────────────
+        if "destroy-orch" in run:
+            section("PHASE — Destroy orchestration workspace")
+            p = Phase("destroy orch")
+            t0 = time.time()
+            try:
+                passed, final_status, elapsed = run_job(
+                    cmd             = f"ibmcloud schematics destroy --id {orch_ws_id} --force",
+                    ws_id           = orch_ws_id,
+                    label           = "destroy-orch",
+                    lf              = lf,
+                    success_statuses= {"INACTIVE", "DRAFT"},
+                    timeout         = ORCH_TIMEOUT,
+                )
+                tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                p.status = "PASS" if passed else "FAIL"
+                if not passed:
+                    p.error = f"status after destroy: {final_status}"
+            except Exception as exc:
+                p.status = "FAIL"
+                p.error  = str(exc)
+                tee(f"  ERROR: {exc}", lf)
+            p.duration = int(time.time() - t0)
+            phases.append(p)
+
+        # ── Phase: delete ─────────────────────────────────────────────────
+        if "delete" in run:
+            section("PHASE — Delete orchestration workspace")
+            p = Phase("delete")
+            t0 = time.time()
+            try:
+                rc, out, err = run_cmd(
+                    f"ibmcloud schematics workspace delete --id {orch_ws_id} --force",
+                    lf=lf,
+                )
+                if out.strip():
+                    print(out, file=lf, flush=True)
+                if rc != 0:
+                    raise RuntimeError((err or out).strip())
+                tee(f"  Workspace {orch_ws_id} deleted", lf)
+                p.status = "PASS"
+            except Exception as exc:
+                p.status = "FAIL"
+                p.error  = str(exc)
+                tee(
+                    f"  Manual cleanup required:\n"
+                    f"    ibmcloud schematics workspace delete --id {orch_ws_id} --force",
+                    lf,
+                )
+            p.duration = int(time.time() - t0)
+            phases.append(p)
+
+        # ── Final result ──────────────────────────────────────────────────
         failed  = [ph for ph in phases if ph.status == "FAIL"]
         overall = "PASS" if not failed else "FAIL"
 
-    report = render_report(started_at, ws_id, ws_name, phases, outputs, overall)
+    report = render_report(started_at, orch_ws_id, orch_ws_name, phases, outputs, overall)
     print(report)
     report_path.write_text(report)
     print(f"  Report : {report_path}")
