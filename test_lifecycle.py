@@ -510,10 +510,10 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
 
     tee("  ws4 variablestore updated successfully", lf)
     wait_for_workspace_ready(ws4_id, lf)
-    # FLO deployment (ws3) can temporarily disrupt the cluster API server for 15-20 min.
-    # Wait 18 min before ws4 plans so ibm_container_cluster_config doesn't time out.
-    tee("  Waiting 18 min for cluster to settle after FLO deployment ...", lf)
-    time.sleep(1080)
+    # FLO deployment (ws3) can temporarily disrupt the cluster API server for 15-20+ min.
+    # Wait 22 min before ws4 plans so ibm_container_cluster_config doesn't time out.
+    tee("  Waiting 22 min for cluster to settle after FLO deployment ...", lf)
+    time.sleep(1320)
 
 
 # ── Report rendering ──────────────────────────────────────────────────────────
