@@ -7,3 +7,8 @@ workspace.json
 
 # Lifecycle test output (reports contain outputs that may include sensitive values)
 test-reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
