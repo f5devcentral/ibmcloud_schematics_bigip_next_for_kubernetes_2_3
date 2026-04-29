@@ -48,10 +48,11 @@ TFVARS_DEFAULT = "terraform.tfvars"
 WS_JSON_PATH   = "workspace.json"
 REPORT_DIR     = Path("test-reports")
 
-POLL_INTERVAL = 30      # seconds between status polls
-JOB_TIMEOUT   = 18000   # 300 min max per sub-workspace phase
-ORCH_TIMEOUT  = 10800   # 3 h max for orchestration workspace operations
-READY_TIMEOUT = 300     # seconds to wait for workspace to leave CONNECTING
+POLL_INTERVAL   = 30      # seconds between status polls
+JOB_TIMEOUT     = 18000   # 300 min max per sub-workspace phase
+ORCH_TIMEOUT    = 10800   # 3 h max for orchestration workspace operations
+READY_TIMEOUT   = 300     # seconds to wait for workspace to leave CONNECTING
+DESTROY_RETRIES = 2       # extra attempts on destroy FAILED (e.g. transient provider init errors)
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
@@ -1040,23 +1041,39 @@ def main():
 
                 section(f"DESTROY — ws{sw['slot']} {sw['name']}")
                 t0 = time.time()
-                try:
-                    passed, final_status, elapsed = run_job(
-                        cmd             = f"ibmcloud schematics destroy --id {sw['id']} --force",
-                        ws_id           = sw["id"],
-                        label           = f"destroy-ws{sw['slot']}",
-                        lf              = lf,
-                        success_statuses= {"INACTIVE", "DRAFT"},
-                        timeout         = JOB_TIMEOUT,
-                    )
-                    tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-                    p.status = "PASS" if passed else "FAIL"
-                    if not passed:
-                        p.error = f"status after destroy: {final_status}"
-                except Exception as exc:
-                    p.status = "FAIL"
-                    p.error  = str(exc)
-                    tee(f"  ERROR: {exc}", lf)
+                passed      = False
+                final_status = "FAILED"
+                for attempt in range(DESTROY_RETRIES + 1):
+                    if attempt > 0:
+                        tee(f"  Destroy FAILED — waiting 30s then retrying "
+                            f"(attempt {attempt}/{DESTROY_RETRIES}) ...", lf)
+                        time.sleep(30)
+                        try:
+                            wait_for_workspace_ready(sw["id"], lf)
+                        except Exception:
+                            pass
+                    try:
+                        passed, final_status, elapsed = run_job(
+                            cmd             = f"ibmcloud schematics destroy --id {sw['id']} --force",
+                            ws_id           = sw["id"],
+                            label           = f"destroy-ws{sw['slot']}",
+                            lf              = lf,
+                            success_statuses= {"INACTIVE", "DRAFT"},
+                            timeout         = JOB_TIMEOUT,
+                        )
+                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                        if passed:
+                            break
+                    except Exception as exc:
+                        tee(f"  ERROR: {exc}", lf)
+                        if attempt >= DESTROY_RETRIES:
+                            p.status = "FAIL"
+                            p.error  = str(exc)
+                            break
+                        continue
+                p.status = "PASS" if passed else "FAIL"
+                if not passed and not p.error:
+                    p.error = f"status after destroy: {final_status}"
                 p.duration = int(time.time() - t0)
                 phases.append(p)
 
@@ -1065,23 +1082,39 @@ def main():
             section("PHASE — Destroy orchestration workspace")
             p = Phase("destroy orch")
             t0 = time.time()
-            try:
-                passed, final_status, elapsed = run_job(
-                    cmd             = f"ibmcloud schematics destroy --id {orch_ws_id} --force",
-                    ws_id           = orch_ws_id,
-                    label           = "destroy-orch",
-                    lf              = lf,
-                    success_statuses= {"INACTIVE", "DRAFT"},
-                    timeout         = ORCH_TIMEOUT,
-                )
-                tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-                p.status = "PASS" if passed else "FAIL"
-                if not passed:
-                    p.error = f"status after destroy: {final_status}"
-            except Exception as exc:
-                p.status = "FAIL"
-                p.error  = str(exc)
-                tee(f"  ERROR: {exc}", lf)
+            passed      = False
+            final_status = "FAILED"
+            for attempt in range(DESTROY_RETRIES + 1):
+                if attempt > 0:
+                    tee(f"  Destroy-orch FAILED — waiting 30s then retrying "
+                        f"(attempt {attempt}/{DESTROY_RETRIES}) ...", lf)
+                    time.sleep(30)
+                    try:
+                        wait_for_workspace_ready(orch_ws_id, lf)
+                    except Exception:
+                        pass
+                try:
+                    passed, final_status, elapsed = run_job(
+                        cmd             = f"ibmcloud schematics destroy --id {orch_ws_id} --force",
+                        ws_id           = orch_ws_id,
+                        label           = "destroy-orch",
+                        lf              = lf,
+                        success_statuses= {"INACTIVE", "DRAFT"},
+                        timeout         = ORCH_TIMEOUT,
+                    )
+                    tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                    if passed:
+                        break
+                except Exception as exc:
+                    tee(f"  ERROR: {exc}", lf)
+                    if attempt >= DESTROY_RETRIES:
+                        p.status = "FAIL"
+                        p.error  = str(exc)
+                        break
+                    continue
+            p.status = "PASS" if passed else "FAIL"
+            if not passed and not p.error:
+                p.error = f"status after destroy: {final_status}"
             p.duration = int(time.time() - t0)
             phases.append(p)
 
