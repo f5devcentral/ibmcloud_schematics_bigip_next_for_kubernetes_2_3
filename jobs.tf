@@ -15,8 +15,9 @@
 # ============================================================
 
 resource "null_resource" "plan_ws1" {
+  count = var.create_roks_cluster ? 1 : 0
   triggers = {
-    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster.id
+    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster[0].id
     schematics_region = var.ibmcloud_schematics_region
     ibmcloud_api_key  = var.ibmcloud_api_key
   }
@@ -178,8 +179,9 @@ resource "null_resource" "plan_ws6" {
 # ============================================================
 
 resource "null_resource" "apply_ws1" {
+  count = var.create_roks_cluster ? 1 : 0
   triggers = {
-    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster.id
+    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster[0].id
     schematics_region = var.ibmcloud_schematics_region
     ibmcloud_api_key  = var.ibmcloud_api_key
   }
@@ -537,8 +539,9 @@ resource "null_resource" "destroy_ws2" {
 }
 
 resource "null_resource" "destroy_ws1" {
+  count = var.create_roks_cluster ? 1 : 0
   triggers = {
-    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster.id
+    workspace_id      = ibm_schematics_workspace.ws1_roks_cluster[0].id
     schematics_region = var.ibmcloud_schematics_region
     ibmcloud_api_key  = var.ibmcloud_api_key
   }

@@ -27,6 +27,7 @@ data "ibm_resource_group" "rg" {
 # ============================================================
 
 resource "ibm_schematics_workspace" "ws1_roks_cluster" {
+  count          = var.create_roks_cluster ? 1 : 0
   name           = "bnk-23-roks-cluster${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "ROKS 4.18 cluster and Transit Gateway"
   location       = var.ibmcloud_schematics_region
@@ -124,14 +125,14 @@ resource "ibm_schematics_workspace" "ws1_roks_cluster" {
 }
 
 data "ibm_schematics_output" "ws1_roks_cluster" {
-  count        = var.read_ws_outputs ? 1 : 0
-  workspace_id = ibm_schematics_workspace.ws1_roks_cluster.id
-  template_id  = ibm_schematics_workspace.ws1_roks_cluster.runtime_data[0].id
+  count        = (var.create_roks_cluster && var.read_ws_outputs) ? 1 : 0
+  workspace_id = ibm_schematics_workspace.ws1_roks_cluster[0].id
+  template_id  = ibm_schematics_workspace.ws1_roks_cluster[0].runtime_data[0].id
   location     = var.ibmcloud_schematics_region
 }
 
 locals {
-  ws1_outputs = var.read_ws_outputs ? try(data.ibm_schematics_output.ws1_roks_cluster[0].output_values, {}) : {}
+  ws1_outputs = (var.create_roks_cluster && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws1_roks_cluster[0].output_values, {}) : {}
 
   # Downstream wiring from ws1
   ws1_roks_cluster_name    = var.create_roks_cluster ? try(local.ws1_outputs["roks_cluster_name"], var.openshift_cluster_name) : var.roks_cluster_id_or_name
