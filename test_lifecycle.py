@@ -53,6 +53,7 @@ JOB_TIMEOUT     = 18000   # 300 min max per sub-workspace phase
 ORCH_TIMEOUT    = 10800   # 3 h max for orchestration workspace operations
 READY_TIMEOUT   = 300     # seconds to wait for workspace to leave CONNECTING
 DESTROY_RETRIES = 2       # extra attempts on destroy FAILED (e.g. transient provider init errors)
+PLAN_RETRIES    = 1       # extra attempts on plan FAILED (e.g. transient cluster config 400 errors)
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
@@ -1035,26 +1036,41 @@ def main():
                     proceed = False
                 else:
                     section(f"PLAN — ws{sw['slot']} {sw['name']}")
-                    t0 = time.time()
-                    try:
-                        passed, final_status, elapsed = run_job(
-                            cmd             = f"ibmcloud schematics plan --id {ws_id}",
-                            ws_id           = ws_id,
-                            label           = f"plan-ws{sw['slot']}",
-                            lf              = lf,
-                            success_statuses= {"INACTIVE", "ACTIVE"},
-                            timeout         = JOB_TIMEOUT,
-                        )
-                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-                        p_plan.status = "PASS" if passed else "FAIL"
-                        if not passed:
-                            p_plan.error = f"status after plan: {final_status}"
-                            proceed = False
-                    except Exception as exc:
-                        p_plan.status = "FAIL"
-                        p_plan.error  = str(exc)
+                    t0           = time.time()
+                    passed       = False
+                    final_status = "FAILED"
+                    for attempt in range(PLAN_RETRIES + 1):
+                        if attempt > 0:
+                            tee(f"  Plan FAILED — waiting 30s then retrying "
+                                f"(attempt {attempt}/{PLAN_RETRIES}) ...", lf)
+                            time.sleep(30)
+                            try:
+                                wait_for_workspace_ready(ws_id, lf)
+                            except Exception:
+                                pass
+                        try:
+                            passed, final_status, elapsed = run_job(
+                                cmd             = f"ibmcloud schematics plan --id {ws_id}",
+                                ws_id           = ws_id,
+                                label           = f"plan-ws{sw['slot']}",
+                                lf              = lf,
+                                success_statuses= {"INACTIVE", "ACTIVE"},
+                                timeout         = JOB_TIMEOUT,
+                            )
+                            tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                            if passed:
+                                break
+                        except Exception as exc:
+                            tee(f"  ERROR: {exc}", lf)
+                            if attempt >= PLAN_RETRIES:
+                                p_plan.status = "FAIL"
+                                p_plan.error  = str(exc)
+                                proceed = False
+                            continue
+                    p_plan.status = "PASS" if passed else "FAIL"
+                    if not passed and not p_plan.error:
+                        p_plan.error = f"status after plan: {final_status}"
                         proceed = False
-                        tee(f"  ERROR: {exc}", lf)
                     p_plan.duration = int(time.time() - t0)
 
                 phases.append(p_plan)
