@@ -10,14 +10,26 @@
 #   ws5 - License BIG-IP Next for Kubernetes in the ROKs cluster - ibmcloud_schematics_bigip_next_for_kubernetes_2_3_license
 #   ws6 - Install the testing VSI framework - ibmcloud_schematics_bigip_next_for_kubernetes_2_3_testing
 #
-# Variables omitted here are wired automatically from upstream outputs:
-#   roks_cluster_name_or_id       ← ws1.openshift_cluster_name
-#   cert_manager_namespace        ← ws2.cert_manager_namespace
-#   flo_trusted_profile_id        ← ws3.flo_trusted_profile_id
-#   flo_cluster_issuer_name       ← ws3.flo_cluster_issuer_name
-#   flo_namespace (cneinstance)   ← ws3.flo_namespace
-#   testing_transit_gateway_name  ← ws1.roks_transit_gateway_name
+# Variables wired automatically from upstream outputs at runtime:
+#   roks_cluster_name_or_id       ← ws1.openshift_cluster_name (fallback: roks_cluster_id_or_name)
+#   cert_manager_namespace        ← ws2.cert_manager_namespace  (fallback: cert_manager_namespace var)
+#   testing_transit_gateway_name  ← ws1.roks_transit_gateway_name (fallback: roks_transit_gateway_name)
+#   flo_trusted_profile_id        ← ws3.flo_trusted_profile_id  (fallback: flo_trusted_profile_id var)
+#   flo_cluster_issuer_name       ← ws3.flo_cluster_issuer_name (fallback: flo_cluster_issuer_name var)
+#   flo_namespace (cneinstance)   ← ws3.flo_namespace           (fallback: flo_namespace var)
+#   cneinstance_network_attachments ← ws3 output               (fallback: cneinstance_network_attachments var)
 # ============================================================
+
+
+# ============================================================
+# Workspace Naming
+# ============================================================
+
+variable "ws_name_suffix" {
+  description = "Suffix appended to all sub-workspace names for grouping (set automatically by the test runner to the run timestamp; leave empty for manual runs)"
+  type        = string
+  default     = ""
+}
 
 
 # ============================================================
@@ -320,6 +332,33 @@ variable "bigip_password" {
 
 variable "bigip_url" {
   description = "BIG-IP URL for the CIS controller"
+  type        = string
+  default     = ""
+}
+
+
+# ============================================================
+# FLO output passthroughs (ws3 → ws4)
+#
+# These are populated automatically by the test runner from ws3 outputs.
+# Set them manually when ws3 was applied in a prior session and you need
+# to run ws4 without re-running ws3 (e.g. --phases sub-ws with ws3 disabled).
+# ============================================================
+
+variable "flo_trusted_profile_id" {
+  description = "Trusted Profile ID created by FLO (ws3) — wired from ws3 output; set here to supply directly when ws3 is skipped"
+  type        = string
+  default     = ""
+}
+
+variable "flo_cluster_issuer_name" {
+  description = "ClusterIssuer name created by FLO (ws3) — wired from ws3 output; set here to supply directly when ws3 is skipped"
+  type        = string
+  default     = ""
+}
+
+variable "cneinstance_network_attachments" {
+  description = "JSON-encoded list of network attachment names for CNEInstance — wired from ws3 output; set here to supply directly when ws3 is skipped (e.g. '[\"ens3-ipvlan-l2\",\"macvlan-conf\"]')"
   type        = string
   default     = ""
 }

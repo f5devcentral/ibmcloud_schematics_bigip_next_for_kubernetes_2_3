@@ -654,17 +654,27 @@ def show_workspace_tree(tfvars_path):
         print("  (none found)")
 
     # ── Sub-workspaces ─────────────────────────────────────────────────────
-    print(f"\n  Sub-workspaces")
+    print(f"\n  Sub-workspaces  (matched by prefix; newest run first)")
     print(f"  {thn}")
-    for slot, ws_name, ctrl_var in SUB_WORKSPACE_DEFS:
+    for slot, ws_base_name, ctrl_var in SUB_WORKSPACE_DEFS:
         tag     = "" if _enabled(ctrl_var) else "  [disabled in tfvars]"
-        matches = by_name.get(ws_name, [])
-        label   = f"  ws{slot}  {ws_name:<28}"
+        # Match exact name (manual runs) or any timestamped variant (test runner)
+        matches = sorted(
+            [
+                (name, entry)
+                for name, entries in by_name.items()
+                for entry in entries
+                if name == ws_base_name or name.startswith(ws_base_name + "-")
+            ],
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        label = f"  ws{slot}  {ws_base_name:<28}"
         if matches:
-            first = matches[0]
-            print(f"{label}  {first['status']:<10}  {first['id']}{tag}")
-            for dup in matches[1:]:
-                print(f"  {'':>3}  {'(duplicate)':<28}  {dup['status']:<10}  {dup['id']}")
+            first_name, first = matches[0]
+            print(f"{label}  {first['status']:<10}  {first['id']}  [{first_name}]{tag}")
+            for name, dup in matches[1:]:
+                print(f"  {'':>3}  {name:<28}  {dup['status']:<10}  {dup['id']}")
         else:
             print(f"{label}  (not found){tag}")
 
@@ -880,6 +890,9 @@ def main():
                     "copy terraform.tfvars.example and fill in your values"
                 )
             variables    = parse_tfvars(tfvars_path)
+            # Inject ws_name_suffix so sub-workspaces share this run's timestamp
+            variables = [v for v in variables if v["name"] != "ws_name_suffix"]
+            variables.append({"name": "ws_name_suffix", "value": ts_label, "type": "string"})
             ws           = build_workspace_json(variables, ts_label, branch=branch)
             orch_ws_name = ws["name"]
 
@@ -897,9 +910,10 @@ def main():
                 v = var_map.get(name, "true" if default else "false")
                 return v.lower() not in ("false", "0", "no")
 
-            for slot, ws_name, ctrl_var in SUB_WORKSPACE_DEFS:
-                enabled = bool_var(ctrl_var) if ctrl_var else True
-                short   = ws_name.replace("bnk-23-", "")
+            for slot, ws_base_name, ctrl_var in SUB_WORKSPACE_DEFS:
+                enabled  = bool_var(ctrl_var) if ctrl_var else True
+                ws_name  = f"{ws_base_name}-{ts_label}"
+                short    = ws_base_name.replace("bnk-23-", "")
                 sub_workspaces.append({
                     "slot":    slot,
                     "name":    ws_name,

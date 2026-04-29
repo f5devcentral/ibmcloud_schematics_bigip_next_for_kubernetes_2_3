@@ -27,7 +27,7 @@ data "ibm_resource_group" "rg" {
 # ============================================================
 
 resource "ibm_schematics_workspace" "ws1_roks_cluster" {
-  name           = "bnk-23-roks-cluster"
+  name           = "bnk-23-roks-cluster${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "ROKS 4.18 cluster and Transit Gateway"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
@@ -144,7 +144,7 @@ locals {
 
 resource "ibm_schematics_workspace" "ws2_cert_manager" {
   count          = var.install_cert_manager ? 1 : 0
-  name           = "bnk-23-cert-manager"
+  name           = "bnk-23-cert-manager${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "cert-manager Helm installation on ROKS cluster"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
@@ -211,7 +211,7 @@ locals {
 
 resource "ibm_schematics_workspace" "ws3_flo" {
   count          = var.deploy_bnk ? 1 : 0
-  name           = "bnk-23-flo"
+  name           = "bnk-23-flo${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "F5 Lifecycle Operator deployment"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
@@ -343,13 +343,13 @@ data "ibm_schematics_output" "ws3_flo" {
 locals {
   ws3_outputs = (var.deploy_bnk && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws3_flo[0].output_values, {}) : {}
 
-  # Downstream wiring from ws3
+  # Downstream wiring from ws3 — fall back to root variables when ws3 is skipped
   ws3_flo_namespace                   = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
-  ws3_flo_trusted_profile_id          = try(local.ws3_outputs["flo_trusted_profile_id"], "")
-  ws3_flo_cluster_issuer_name         = try(local.ws3_outputs["flo_cluster_issuer_name"], "")
+  ws3_flo_trusted_profile_id          = try(local.ws3_outputs["flo_trusted_profile_id"], var.flo_trusted_profile_id)
+  ws3_flo_cluster_issuer_name         = try(local.ws3_outputs["flo_cluster_issuer_name"], var.flo_cluster_issuer_name)
   ws3_cneinstance_network_attachments = try(
     jsondecode(local.ws3_outputs["cneinstance_network_attachments"]),
-    ["ens3-ipvlan-l2", "macvlan-conf"]
+    var.cneinstance_network_attachments != "" ? jsondecode(var.cneinstance_network_attachments) : ["ens3-ipvlan-l2", "macvlan-conf"]
   )
 }
 
@@ -359,7 +359,7 @@ locals {
 
 resource "ibm_schematics_workspace" "ws4_cneinstance" {
   count          = var.deploy_bnk ? 1 : 0
-  name           = "bnk-23-cneinstance"
+  name           = "bnk-23-cneinstance${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "F5 CNEInstance custom resource deployment"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
@@ -468,7 +468,7 @@ locals {
 
 resource "ibm_schematics_workspace" "ws5_license" {
   count          = var.deploy_bnk ? 1 : 0
-  name           = "bnk-23-license"
+  name           = "bnk-23-license${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "F5 CNE License custom resource"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
@@ -558,7 +558,7 @@ locals {
 # ============================================================
 
 resource "ibm_schematics_workspace" "ws6_testing" {
-  name           = "bnk-23-testing"
+  name           = "bnk-23-testing${var.ws_name_suffix != "" ? "-${var.ws_name_suffix}" : ""}"
   description    = "Jumphost infrastructure for BNK testing"
   location       = var.ibmcloud_schematics_region
   resource_group = data.ibm_resource_group.rg.id
