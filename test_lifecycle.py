@@ -425,23 +425,44 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
     tee("  Fetching ws3 (FLO) outputs ...", lf)
     ws3_outputs = fetch_outputs(ws3_id, lf)
 
-    flo_trusted_profile_id         = ws3_outputs.get("flo_trusted_profile_id", "")
-    flo_cluster_issuer_name        = ws3_outputs.get("flo_cluster_issuer_name", "")
-    cneinstance_network_attachments = ws3_outputs.get("cneinstance_network_attachments", "[]")
-    flo_namespace                  = ws3_outputs.get("flo_namespace", "")
+    flo_trusted_profile_id  = ws3_outputs.get("flo_trusted_profile_id", "")
+    flo_cluster_issuer_name = ws3_outputs.get("flo_cluster_issuer_name", "")
+    flo_namespace           = ws3_outputs.get("flo_namespace", "")
+
+    # cneinstance_network_attachments may come back as a list (JSON array) or
+    # a string.  Normalise to a JSON string either way.
+    raw_na = ws3_outputs.get("cneinstance_network_attachments", None)
+    if raw_na is None:
+        cneinstance_network_attachments = None          # don't overwrite ws4
+    elif isinstance(raw_na, list):
+        cneinstance_network_attachments = json.dumps(raw_na)
+    else:
+        # It's a string — validate it is JSON; if not try ast.literal_eval
+        try:
+            parsed = json.loads(raw_na)
+            cneinstance_network_attachments = json.dumps(parsed)
+        except (json.JSONDecodeError, TypeError):
+            import ast as _ast
+            try:
+                parsed = _ast.literal_eval(raw_na)
+                cneinstance_network_attachments = json.dumps(parsed)
+            except Exception:
+                cneinstance_network_attachments = raw_na   # keep as-is
 
     if not flo_trusted_profile_id:
         raise RuntimeError("ws3 output flo_trusted_profile_id is empty — FLO may not have applied successfully")
 
     tee(f"  flo_trusted_profile_id    : {flo_trusted_profile_id}", lf)
     tee(f"  flo_cluster_issuer_name   : {flo_cluster_issuer_name}", lf)
-    tee(f"  cneinstance_network_attachments: {cneinstance_network_attachments[:80]}...", lf)
+    if cneinstance_network_attachments is not None:
+        tee(f"  cneinstance_network_attachments: {cneinstance_network_attachments[:80]}...", lf)
 
-    ws3_patch = {
-        "flo_trusted_profile_id":          flo_trusted_profile_id,
-        "flo_cluster_issuer_name":         flo_cluster_issuer_name,
-        "cneinstance_network_attachments": cneinstance_network_attachments,
+    ws3_patch: dict = {
+        "flo_trusted_profile_id":  flo_trusted_profile_id,
+        "flo_cluster_issuer_name": flo_cluster_issuer_name,
     }
+    if cneinstance_network_attachments is not None:
+        ws3_patch["cneinstance_network_attachments"] = cneinstance_network_attachments
     if flo_namespace:
         ws3_patch["flo_utils_namespace"] = flo_namespace
 
@@ -453,17 +474,16 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
     tf_type     = td.get("type", "terraform_v1.5")
 
     # Rebuild variablestore patching the ws3-sourced variables.
-    # Secure variables whose value is masked (empty) in the GET response are
-    # included as-is; Schematics preserves the actual stored secret when the
-    # value is empty in an update payload.
+    # Only keep name/value/type/secure — the IBM Cloud CLI rejects payloads
+    # that include extra fields (e.g. description) returned by workspace GET.
     remaining = dict(ws3_patch)
     updated   = []
     for v in (td.get("variablestore") or []):
-        name = v.get("name", "")
+        name  = v.get("name", "")
+        clean = {k: v[k] for k in ("name", "value", "type", "secure") if k in v}
         if name in remaining:
-            updated.append({**v, "value": remaining.pop(name)})
-        else:
-            updated.append(v)
+            clean["value"] = remaining.pop(name)
+        updated.append(clean)
     for name, value in remaining.items():
         updated.append({"name": name, "value": value})
 
@@ -482,7 +502,9 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
     )
     update_file.unlink(missing_ok=True)
     if rc != 0:
-        raise RuntimeError(f"ws4 variablestore update failed: {(err or out).strip()}")
+        raise RuntimeError(
+            f"ws4 variablestore update failed: {(err or out).strip()[:300]}"
+        )
 
     tee("  ws4 variablestore updated successfully", lf)
     wait_for_workspace_ready(ws4_id, lf)
