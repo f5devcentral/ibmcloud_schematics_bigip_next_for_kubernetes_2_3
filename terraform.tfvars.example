@@ -10,6 +10,19 @@
 
 
 # ============================================================
+# Workspace Naming
+# ============================================================
+
+# Suffix appended to all sub-workspace names so they can be grouped with the
+# orchestration workspace in the IBM Cloud console.
+# The test runner sets this automatically to the run timestamp (e.g. 20260429_134049),
+# producing names like bnk-23-flo-20260429_134049.
+# Leave empty ("") for manual Terraform runs — sub-workspaces get their base
+# names (bnk-23-flo, bnk-23-cneinstance, etc.) with no suffix.
+ws_name_suffix = ""
+
+
+# ============================================================
 # IBM Cloud — Common
 # ============================================================
 
@@ -130,6 +143,37 @@ flo_utils_namespace = "f5-utils"
 bigip_username = "admin"
 bigip_password = ""
 bigip_url      = ""
+
+
+# --- FLO output passthroughs (ws3 → ws4) ---
+#
+# The values below are produced by ws3 (FLO) and wired into ws4 (CNEInstance)
+# automatically by the test runner after ws3 applies.  You only need to set
+# them manually when:
+#   - ws3 was applied in a prior session and you want to run ws4 without
+#     re-running ws3 (e.g. a partial lifecycle run with --phases sub-ws)
+#   - you are running the orchestration workspace directly with Terraform
+#     (not via the test runner) and ws3 has already been applied
+#
+# Leave all three empty ("") for normal full-lifecycle test runs — the test
+# runner patches them automatically from ws3 outputs before ws4 plans.
+
+# IBM Cloud Trusted Profile ID created by FLO.
+# Required by ws4 (CNEInstance) to authenticate with the cluster.
+# Obtain from ws3 output: ibmcloud schematics output --id <ws3-id>
+flo_trusted_profile_id = ""
+
+# Kubernetes ClusterIssuer name created by FLO.
+# Required by ws4 to configure certificate issuance.
+# Obtain from ws3 output: ibmcloud schematics output --id <ws3-id>
+flo_cluster_issuer_name = ""
+
+# JSON-encoded list of network attachment names for the CNEInstance.
+# Required by ws4 to attach the CNE pod to the correct cluster networks.
+# Obtain from ws3 output and encode as a JSON array string, e.g.:
+#   cneinstance_network_attachments = "[\"ens3-ipvlan-l2\",\"macvlan-conf\"]"
+# Leave empty to use the ws3 output (wired by test runner) or the default.
+cneinstance_network_attachments = ""
 
 
 # --- CNEInstance (ws4) ---
