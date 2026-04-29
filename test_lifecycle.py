@@ -328,8 +328,21 @@ def fetch_outputs(ws_id, lf):
         items = data if isinstance(data, list) else [data]
         out   = {}
         for template in items:
-            for item in template.get("output_values", []):
-                out[item["name"]] = item.get("value", "")
+            for vals in template.get("output_values", []):
+                if not isinstance(vals, dict):
+                    continue
+                if "name" in vals:
+                    # format: [{"name": "var", "value": "..."}]
+                    out[vals["name"]] = vals.get("value", "")
+                else:
+                    # format: [{"var_name": value, ...}] — one dict maps all outputs
+                    for name, v in vals.items():
+                        if isinstance(v, dict):
+                            out[name] = v.get("value", "")
+                        elif isinstance(v, list):
+                            out[name] = json.dumps(v)
+                        else:
+                            out[name] = str(v) if v is not None else ""
         return out
     except Exception as exc:
         tee(f"  WARNING: could not fetch outputs: {exc}", lf)
