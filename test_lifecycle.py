@@ -54,7 +54,7 @@ ORCH_TIMEOUT    = 10800   # 3 h max for orchestration workspace operations
 READY_TIMEOUT   = 300     # seconds to wait for workspace to leave CONNECTING
 DESTROY_RETRIES   = 2     # extra attempts on destroy FAILED (e.g. transient provider init errors)
 PLAN_RETRIES      = 4     # extra attempts on plan FAILED (cluster API unreachable after FLO deploy)
-PLAN_RETRY_WAIT   = 90    # seconds to wait between plan retry attempts
+PLAN_RETRY_WAIT   = 300   # seconds to wait between plan retry attempts (5 min — cluster needs ~12 min to recover after FLO)
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
@@ -510,10 +510,10 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
 
     tee("  ws4 variablestore updated successfully", lf)
     wait_for_workspace_ready(ws4_id, lf)
-    # FLO deployment (ws3) can temporarily disrupt the cluster API server.
-    # Wait 3 min before ws4 plans so ibm_container_cluster_config doesn't time out.
-    tee("  Waiting 3 min for cluster to settle after FLO deployment ...", lf)
-    time.sleep(180)
+    # FLO deployment (ws3) can temporarily disrupt the cluster API server for 10-15 min.
+    # Wait 10 min before ws4 plans so ibm_container_cluster_config doesn't time out.
+    tee("  Waiting 10 min for cluster to settle after FLO deployment ...", lf)
+    time.sleep(600)
 
 
 # ── Report rendering ──────────────────────────────────────────────────────────
