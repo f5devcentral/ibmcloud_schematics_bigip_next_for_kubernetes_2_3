@@ -355,22 +355,28 @@ def reapply_orch_with_ws_outputs(orch_ws_id, variables, lf):
     if not patched:
         updated.append({"name": "read_ws_outputs", "value": "true", "type": "bool"})
 
-    # Fetch the existing workspace template folder/type so the update payload is complete
+    # Fetch the existing workspace template id/folder/type so the update payload
+    # targets the existing template (preserving the state file association).
+    # Without the template id, Schematics creates a new template entry and the
+    # subsequent apply fails with "statefile cannot be located".
     try:
-        ws_data = ibmcloud_json(f"ibmcloud schematics workspace get --id {orch_ws_id}", lf)
-        td      = ws_data.get("template_data", [{}])[0]
-        folder  = td.get("folder", ".")
-        tf_type = td.get("type", "terraform_v1.5")
+        ws_data     = ibmcloud_json(f"ibmcloud schematics workspace get --id {orch_ws_id}", lf)
+        td          = ws_data.get("template_data", [{}])[0]
+        template_id = td.get("id", "")
+        folder      = td.get("folder", ".")
+        tf_type     = td.get("type", "terraform_v1.5")
     except Exception:
-        folder, tf_type = ".", "terraform_v1.5"
+        template_id, folder, tf_type = "", ".", "terraform_v1.5"
 
-    update_payload = {
-        "template_data": [{
-            "folder":       folder,
-            "type":         tf_type,
-            "variablestore": updated,
-        }]
+    template_entry = {
+        "folder":        folder,
+        "type":          tf_type,
+        "variablestore": updated,
     }
+    if template_id:
+        template_entry["id"] = template_id
+
+    update_payload = {"template_data": [template_entry]}
     update_file = Path("workspace_reapply_update.json")
     update_file.write_text(json.dumps(update_payload, indent=2))
 
