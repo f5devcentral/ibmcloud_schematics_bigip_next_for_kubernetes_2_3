@@ -53,8 +53,8 @@ JOB_TIMEOUT     = 18000   # 300 min max per sub-workspace phase
 ORCH_TIMEOUT    = 10800   # 3 h max for orchestration workspace operations
 READY_TIMEOUT   = 300     # seconds to wait for workspace to leave CONNECTING
 DESTROY_RETRIES   = 2     # extra attempts on destroy FAILED (e.g. transient provider init errors)
-PLAN_RETRIES      = 4     # extra attempts on plan FAILED (cluster API unreachable after FLO deploy)
-PLAN_RETRY_WAIT   = 300   # seconds to wait between plan retry attempts (5 min — cluster needs ~12 min to recover after FLO)
+PLAN_RETRIES      = 1     # extra attempts on plan FAILED
+PLAN_RETRY_WAIT   = 30    # seconds to wait between plan retry attempts
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
@@ -478,13 +478,24 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
     # Rebuild variablestore patching the ws3-sourced variables.
     # Only keep name/value/type/secure — the IBM Cloud CLI rejects payloads
     # that include extra fields (e.g. description) returned by workspace GET.
+    # For secure variables with masked values (empty string returned by GET),
+    # omit the "value" key entirely so IBM Cloud preserves the existing secret.
+    # Sending "value": "" for a secure variable clears it.
     remaining = dict(ws3_patch)
     updated   = []
     for v in (td.get("variablestore") or []):
-        name  = v.get("name", "")
-        clean = {k: v[k] for k in ("name", "value", "type", "secure") if k in v}
+        name      = v.get("name", "")
+        is_secure = v.get("secure", False)
+        raw_val   = v.get("value", "")
         if name in remaining:
+            # Explicitly updating this variable — always include value
+            clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
             clean["value"] = remaining.pop(name)
+        elif is_secure and not raw_val:
+            # Secure variable with masked value — omit "value" to preserve secret
+            clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
+        else:
+            clean = {k: v[k] for k in ("name", "value", "type", "secure") if k in v}
         updated.append(clean)
     for name, value in remaining.items():
         updated.append({"name": name, "value": value})
@@ -510,10 +521,6 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
 
     tee("  ws4 variablestore updated successfully", lf)
     wait_for_workspace_ready(ws4_id, lf)
-    # FLO deployment (ws3) can temporarily disrupt the cluster API server for 15-20+ min.
-    # Wait 22 min before ws4 plans so ibm_container_cluster_config doesn't time out.
-    tee("  Waiting 22 min for cluster to settle after FLO deployment ...", lf)
-    time.sleep(1320)
 
 
 # ── Report rendering ──────────────────────────────────────────────────────────
