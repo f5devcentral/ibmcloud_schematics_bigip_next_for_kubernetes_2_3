@@ -335,6 +335,66 @@ def fetch_outputs(ws_id, lf):
         return {}
 
 
+def reapply_orch_with_ws_outputs(orch_ws_id, variables, lf):
+    """
+    Switch read_ws_outputs → true in the orchestration workspace and re-apply it.
+    This causes Terraform to read ws3 outputs and wire flo_trusted_profile_id /
+    flo_cluster_issuer_name into ws4 and ws5 template_inputs before those
+    workspaces run their own plan/apply.
+    """
+    # Build variablestore with read_ws_outputs forced to true
+    patched = False
+    updated = []
+    for v in variables:
+        if v["name"] == "read_ws_outputs":
+            updated.append({**v, "value": "true"})
+            patched = True
+        else:
+            updated.append(v)
+    if not patched:
+        updated.append({"name": "read_ws_outputs", "value": "true", "type": "bool"})
+
+    # Fetch the existing workspace template folder/type so the update payload is complete
+    try:
+        ws_data = ibmcloud_json(f"ibmcloud schematics workspace get --id {orch_ws_id}", lf)
+        td      = ws_data.get("template_data", [{}])[0]
+        folder  = td.get("folder", ".")
+        tf_type = td.get("type", "terraform_v1.5")
+    except Exception:
+        folder, tf_type = ".", "terraform_v1.5"
+
+    update_payload = {
+        "template_data": [{
+            "folder":       folder,
+            "type":         tf_type,
+            "variablestore": updated,
+        }]
+    }
+    update_file = Path("workspace_reapply_update.json")
+    update_file.write_text(json.dumps(update_payload, indent=2))
+
+    tee("  Updating orchestration workspace (read_ws_outputs → true) ...", lf)
+    rc, out, err = run_cmd(
+        f"ibmcloud schematics workspace update --id {orch_ws_id} --file {update_file} --output json",
+        lf=lf,
+    )
+    update_file.unlink(missing_ok=True)
+    if rc != 0:
+        raise RuntimeError(f"workspace update failed: {(err or out).strip()}")
+
+    tee("  Waiting for workspace to settle after update ...", lf)
+    wait_for_workspace_ready(orch_ws_id, lf)
+
+    return run_job(
+        cmd             = f"ibmcloud schematics apply --id {orch_ws_id} --force",
+        ws_id           = orch_ws_id,
+        label           = "reapply-orch",
+        lf              = lf,
+        success_statuses= {"ACTIVE"},
+        timeout         = ORCH_TIMEOUT,
+    )
+
+
 # ── Report rendering ──────────────────────────────────────────────────────────
 
 class Phase:
@@ -921,6 +981,33 @@ def main():
                     p_apply.duration = int(time.time() - t0)
 
                 phases.append(p_apply)
+
+                # ── After ws3 apply: re-apply orch to wire ws3 outputs into ws4/ws5 ──
+                # ws3 outputs (flo_trusted_profile_id, flo_cluster_issuer_name,
+                # cneinstance_network_attachments) are empty when the orchestration
+                # workspace is first applied because read_ws_outputs defaults to false.
+                # Re-applying with read_ws_outputs=true propagates them into ws4/ws5
+                # template_inputs before those workspaces run their own plan/apply.
+                if sw["slot"] == 3 and p_apply.status == "PASS" and orch_ws_id and proceed:
+                    section("Re-applying orchestration workspace — wire ws3 outputs into ws4 / ws5")
+                    p_reapply = Phase("reapply orch (ws3→ws4 wire)")
+                    t0 = time.time()
+                    try:
+                        passed, final_status, elapsed = reapply_orch_with_ws_outputs(
+                            orch_ws_id, variables, lf
+                        )
+                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                        p_reapply.status = "PASS" if passed else "FAIL"
+                        if not passed:
+                            p_reapply.error = f"status after reapply: {final_status}"
+                            proceed = False
+                    except Exception as exc:
+                        p_reapply.status = "FAIL"
+                        p_reapply.error  = str(exc)
+                        proceed = False
+                        tee(f"  ERROR: {exc}", lf)
+                    p_reapply.duration = int(time.time() - t0)
+                    phases.append(p_reapply)
 
         # ── Phase: destroy-sub (ws6→ws1) ──────────────────────────────────
         # Skip workspaces that are INACTIVE/DRAFT — they were never applied
