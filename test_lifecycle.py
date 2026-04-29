@@ -402,6 +402,79 @@ def reapply_orch_with_ws_outputs(orch_ws_id, variables, lf):
     )
 
 
+def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
+    """
+    Read ws3 (FLO) outputs and inject them directly into ws4 (CNEInstance)
+    variablestore. This avoids re-applying the orchestration workspace (which
+    would fail because it tries to read outputs from ws4/ws5/ws6 that have no
+    statefiles yet at this point in the lifecycle).
+    """
+    tee("  Fetching ws3 (FLO) outputs ...", lf)
+    ws3_outputs = fetch_outputs(ws3_id, lf)
+
+    flo_trusted_profile_id         = ws3_outputs.get("flo_trusted_profile_id", "")
+    flo_cluster_issuer_name        = ws3_outputs.get("flo_cluster_issuer_name", "")
+    cneinstance_network_attachments = ws3_outputs.get("cneinstance_network_attachments", "[]")
+    flo_namespace                  = ws3_outputs.get("flo_namespace", "")
+
+    if not flo_trusted_profile_id:
+        raise RuntimeError("ws3 output flo_trusted_profile_id is empty — FLO may not have applied successfully")
+
+    tee(f"  flo_trusted_profile_id    : {flo_trusted_profile_id}", lf)
+    tee(f"  flo_cluster_issuer_name   : {flo_cluster_issuer_name}", lf)
+    tee(f"  cneinstance_network_attachments: {cneinstance_network_attachments[:80]}...", lf)
+
+    ws3_patch = {
+        "flo_trusted_profile_id":          flo_trusted_profile_id,
+        "flo_cluster_issuer_name":         flo_cluster_issuer_name,
+        "cneinstance_network_attachments": cneinstance_network_attachments,
+    }
+    if flo_namespace:
+        ws3_patch["flo_utils_namespace"] = flo_namespace
+
+    tee("  Fetching ws4 (CNEInstance) workspace config ...", lf)
+    ws4_data    = ibmcloud_json(f"ibmcloud schematics workspace get --id {ws4_id}", lf)
+    td          = ws4_data.get("template_data", [{}])[0]
+    template_id = td.get("id", "")
+    folder      = td.get("folder", ".")
+    tf_type     = td.get("type", "terraform_v1.5")
+
+    # Rebuild variablestore patching the ws3-sourced variables.
+    # Secure variables whose value is masked (empty) in the GET response are
+    # included as-is; Schematics preserves the actual stored secret when the
+    # value is empty in an update payload.
+    remaining = dict(ws3_patch)
+    updated   = []
+    for v in (td.get("variablestore") or []):
+        name = v.get("name", "")
+        if name in remaining:
+            updated.append({**v, "value": remaining.pop(name)})
+        else:
+            updated.append(v)
+    for name, value in remaining.items():
+        updated.append({"name": name, "value": value})
+
+    template_entry = {"folder": folder, "type": tf_type, "variablestore": updated}
+    if template_id:
+        template_entry["id"] = template_id
+
+    update_payload = {"template_data": [template_entry]}
+    update_file    = Path("ws4_wire_update.json")
+    update_file.write_text(json.dumps(update_payload, indent=2))
+
+    tee("  Updating ws4 variablestore with ws3 outputs ...", lf)
+    rc, out, err = run_cmd(
+        f"ibmcloud schematics workspace update --id {ws4_id} --file {update_file} --output json",
+        lf=lf,
+    )
+    update_file.unlink(missing_ok=True)
+    if rc != 0:
+        raise RuntimeError(f"ws4 variablestore update failed: {(err or out).strip()}")
+
+    tee("  ws4 variablestore updated successfully", lf)
+    wait_for_workspace_ready(ws4_id, lf)
+
+
 # ── Report rendering ──────────────────────────────────────────────────────────
 
 class Phase:
@@ -989,25 +1062,23 @@ def main():
 
                 phases.append(p_apply)
 
-                # ── After ws3 apply: re-apply orch to wire ws3 outputs into ws4/ws5 ──
-                # ws3 outputs (flo_trusted_profile_id, flo_cluster_issuer_name,
-                # cneinstance_network_attachments) are empty when the orchestration
-                # workspace is first applied because read_ws_outputs defaults to false.
-                # Re-applying with read_ws_outputs=true propagates them into ws4/ws5
-                # template_inputs before those workspaces run their own plan/apply.
-                if sw["slot"] == 3 and p_apply.status == "PASS" and orch_ws_id and proceed:
-                    section("Re-applying orchestration workspace — wire ws3 outputs into ws4 / ws5")
+                # ── After ws3 apply: inject ws3 outputs directly into ws4 variablestore ──
+                # flo_trusted_profile_id / flo_cluster_issuer_name /
+                # cneinstance_network_attachments are empty when the orchestration
+                # workspace first creates ws4 (read_ws_outputs=false at that time).
+                # We read them from ws3 and patch ws4 directly rather than reapplying
+                # the orchestration workspace, which would fail because it also tries
+                # to read ws4/ws5/ws6 outputs (those workspaces have no statefiles yet).
+                if sw["slot"] == 3 and p_apply.status == "PASS" and proceed:
+                    section("Wiring ws3 outputs into ws4 (CNEInstance) variablestore")
                     p_reapply = Phase("reapply orch (ws3→ws4 wire)")
                     t0 = time.time()
                     try:
-                        passed, final_status, elapsed = reapply_orch_with_ws_outputs(
-                            orch_ws_id, variables, lf
-                        )
-                        tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
-                        p_reapply.status = "PASS" if passed else "FAIL"
-                        if not passed:
-                            p_reapply.error = f"status after reapply: {final_status}"
-                            proceed = False
+                        ws4 = next((s for s in sub_workspaces if s["slot"] == 4), None)
+                        if not ws4 or not ws4.get("id"):
+                            raise RuntimeError("ws4 ID not found — cannot wire ws3 outputs")
+                        wire_ws3_outputs_into_ws4(sw["id"], ws4["id"], lf)
+                        p_reapply.status = "PASS"
                     except Exception as exc:
                         p_reapply.status = "FAIL"
                         p_reapply.error  = str(exc)
