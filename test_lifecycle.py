@@ -1139,6 +1139,11 @@ def main():
 
                 phases.append(p_apply)
 
+                # Track whether an apply actually ran (vs. being skipped because plan failed).
+                # Used in destroy-sub to avoid triggering Terraform refresh on workspaces
+                # whose plan failed and therefore have no managed state.
+                sw["apply_attempted"] = p_apply.status in {"PASS", "FAIL"}
+
                 # ── After ws3 apply: inject ws3 outputs directly into ws4 variablestore ──
                 # flo_trusted_profile_id / flo_cluster_issuer_name /
                 # cneinstance_network_attachments are empty when the orchestration
@@ -1166,9 +1171,10 @@ def main():
 
         # ── Phase: destroy-sub (ws6→ws1) ──────────────────────────────────
         # Skip workspaces that are INACTIVE/DRAFT — they were never applied
-        # and have no managed state.  Attempting destroy on an unapplied
-        # workspace causes Terraform refresh to fail on data sources (e.g.
-        # cluster lookup) even though the state is empty.
+        # and have no managed state.  Also skip workspaces that are FAILED
+        # but never had an apply attempted (plan-only failure): Terraform
+        # refresh will fail on data sources (e.g. cluster kubeconfig lookup)
+        # even though the state is empty.
         if "destroy-sub" in run:
             for sw in reversed(sub_workspaces):
                 p = Phase(f"destroy {sw['label']}")
@@ -1185,8 +1191,11 @@ def main():
                     phases.append(p)
                     continue
 
-                pre_status = get_ws_status(sw["id"])
-                if pre_status in {"INACTIVE", "DRAFT"}:
+                pre_status     = get_ws_status(sw["id"])
+                # apply_attempted is set by the sub-ws phase; True if apply ran (pass or fail).
+                # Default True (conservative) when the sub-ws phase was not part of this run.
+                apply_attempted = sw.get("apply_attempted", True)
+                if pre_status in {"INACTIVE", "DRAFT"} or (pre_status == "FAILED" and not apply_attempted):
                     tee(f"  Skipping destroy of ws{sw['slot']} — status={pre_status} (no managed state)", lf)
                     p.status = "SKIP"
                     p.error  = f"no managed state (status={pre_status})"
