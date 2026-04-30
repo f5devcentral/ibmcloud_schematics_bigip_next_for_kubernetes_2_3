@@ -131,7 +131,9 @@ wait_ready() {
 }
 
 # Poll workspace status until it reaches a terminal state or times out.
-# Prints the final status string to stdout.
+# Only the final status word is written to stdout (for capture via $()).
+# Progress lines go to stderr so they reach the terminal without polluting
+# the captured value when called as status=$(poll_terminal ...).
 poll_terminal() {
     local ws_id="$1" label="$2" timeout="${3:-$JOB_TIMEOUT}"
     local elapsed=0
@@ -139,15 +141,15 @@ poll_terminal() {
         local status
         status=$(ws_status "$ws_id")
         if [[ "$status" =~ ^(INACTIVE|ACTIVE|FAILED|STOPPED|DRAFT)$ ]]; then
-            printf '\n'
+            printf '\n' >&2
             echo "$status"
             return 0
         fi
-        printf '\r  [%-22s] %5ds  status=%-10s    ' "$label" "$elapsed" "$status"
+        printf '\r  [%-22s] %5ds  status=%-10s    ' "$label" "$elapsed" "$status" >&2
         sleep "$POLL_INTERVAL"
         (( elapsed += POLL_INTERVAL ))
     done
-    printf '\n'
+    printf '\n' >&2
     echo "TIMEOUT"
 }
 
@@ -155,6 +157,7 @@ poll_terminal() {
 # away from pre_status before beginning terminal polling.  Without this,
 # poll_terminal sees the pre-submission INACTIVE status on the first check,
 # treats it as a completed job, and returns immediately — the job never ran.
+# Progress output goes to stderr (same reason as poll_terminal above).
 wait_for_transition() {
     local ws_id="$1" pre_status="$2" label="$3"
     local elapsed=0
@@ -162,14 +165,14 @@ wait_for_transition() {
         local status
         status=$(ws_status "$ws_id")
         if [[ "$status" != "$pre_status" ]]; then
-            printf '\n'; return 0
+            printf '\n' >&2; return 0
         fi
         printf '\r  [%-22s] %3ds  waiting for job to start (status=%s)    ' \
-            "$label" "$elapsed" "$status"
+            "$label" "$elapsed" "$status" >&2
         sleep 5
         (( elapsed += 5 ))
     done
-    printf '\n'
+    printf '\n' >&2
     log "WARNING: $label status did not change from $pre_status after 120s — proceeding"
 }
 
