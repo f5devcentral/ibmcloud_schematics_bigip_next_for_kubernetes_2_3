@@ -53,8 +53,8 @@ JOB_TIMEOUT     = 18000   # 300 min max per sub-workspace phase
 ORCH_TIMEOUT    = 10800   # 3 h max for orchestration workspace operations
 READY_TIMEOUT   = 300     # seconds to wait for workspace to leave CONNECTING
 DESTROY_RETRIES   = 2     # extra attempts on destroy FAILED (e.g. transient provider init errors)
-PLAN_RETRIES      = 1     # extra attempts on plan FAILED
-PLAN_RETRY_WAIT   = 30    # seconds to wait between plan retry attempts
+PLAN_RETRIES      = 2     # extra attempts on plan FAILED
+PLAN_RETRY_WAIT   = 60    # seconds to wait between plan retry attempts
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
 
@@ -1062,6 +1062,15 @@ def main():
                     t0           = time.time()
                     passed       = False
                     final_status = "FAILED"
+                    # ws3 FLO installs operators and network attachments that temporarily
+                    # put the ROKS cluster in a reconfiguring state. The IBM Container Service
+                    # API returns 400 on ibm_container_cluster_config reads during this window.
+                    # Wait before attempting ws4 plan to let the cluster stabilize.
+                    if sw["slot"] == 4:
+                        pre_plan_wait = 180
+                        tee(f"  Waiting {pre_plan_wait}s for cluster to stabilize "
+                            f"after ws3 FLO changes ...", lf)
+                        time.sleep(pre_plan_wait)
                     for attempt in range(PLAN_RETRIES + 1):
                         if attempt > 0:
                             tee(f"  Plan FAILED — waiting {PLAN_RETRY_WAIT}s then retrying "
