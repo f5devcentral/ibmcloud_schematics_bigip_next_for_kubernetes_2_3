@@ -475,23 +475,21 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf, tf_var_map=None):
     # Rebuild variablestore patching the ws3-sourced variables.
     # Only keep name/value/type/secure — the IBM Cloud CLI rejects payloads
     # that include extra fields (e.g. description) returned by workspace GET.
-    # For secure variables with masked values (empty string returned by GET),
-    # omit the "value" key entirely so IBM Cloud preserves the existing secret.
-    # Sending "value": "" for a secure variable clears it.
     remaining = dict(ws3_patch)
     updated   = []
     for v in (td.get("variablestore") or []):
         name      = v.get("name", "")
         is_secure = v.get("secure", False)
-        raw_val   = v.get("value", "")
         if name in remaining:
             # Explicitly updating this variable — always include value
             clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
             clean["value"] = remaining.pop(name)
-        elif is_secure and not raw_val:
-            # Secure variable with masked value.  IBM Cloud Schematics clears secure
-            # variables when their value is omitted from a workspace update, so we
-            # supply the known plaintext from tf_var_map when available.
+        elif is_secure:
+            # IBM Cloud Schematics never returns plaintext for secure variables —
+            # the GET value is always a mask (e.g. "*******", "Sensitive value stored
+            # on server").  Sending that mask back would overwrite the real secret
+            # with the literal mask string.  Instead, supply plaintext from tf_var_map
+            # when available, or omit "value" entirely to preserve the existing secret.
             clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
             if tf_var_map and name in tf_var_map:
                 clean["value"] = tf_var_map[name]
