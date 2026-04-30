@@ -429,7 +429,6 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
 
     flo_trusted_profile_id  = ws3_outputs.get("flo_trusted_profile_id", "")
     flo_cluster_issuer_name = ws3_outputs.get("flo_cluster_issuer_name", "")
-    flo_namespace           = ws3_outputs.get("flo_namespace", "")
 
     # cneinstance_network_attachments may come back as a list (JSON array) or
     # a string.  Normalise to a JSON string either way.
@@ -465,8 +464,6 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
     }
     if cneinstance_network_attachments is not None:
         ws3_patch["cneinstance_network_attachments"] = cneinstance_network_attachments
-    if flo_namespace:
-        ws3_patch["flo_utils_namespace"] = flo_namespace
 
     tee("  Fetching ws4 (CNEInstance) workspace config ...", lf)
     ws4_data    = ibmcloud_json(f"ibmcloud schematics workspace get --id {ws4_id}", lf)
