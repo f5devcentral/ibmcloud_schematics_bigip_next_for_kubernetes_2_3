@@ -371,7 +371,7 @@ resource "null_resource" "destroy_ws6" {
     EOT
   }
 
-  depends_on = [ibm_schematics_workspace.ws6_testing]
+  depends_on = [null_resource.destroy_ws5, ibm_schematics_workspace.ws6_testing]
 }
 
 resource "null_resource" "destroy_ws5" {
@@ -412,7 +412,7 @@ resource "null_resource" "destroy_ws5" {
     EOT
   }
 
-  depends_on = [null_resource.destroy_ws6, ibm_schematics_workspace.ws5_license]
+  depends_on = [null_resource.destroy_ws4, ibm_schematics_workspace.ws5_license]
 }
 
 resource "null_resource" "destroy_ws4" {
@@ -453,7 +453,7 @@ resource "null_resource" "destroy_ws4" {
     EOT
   }
 
-  depends_on = [null_resource.destroy_ws5, ibm_schematics_workspace.ws4_cneinstance]
+  depends_on = [null_resource.destroy_ws3, ibm_schematics_workspace.ws4_cneinstance]
 }
 
 resource "null_resource" "destroy_ws3" {
@@ -494,7 +494,7 @@ resource "null_resource" "destroy_ws3" {
     EOT
   }
 
-  depends_on = [null_resource.destroy_ws4, ibm_schematics_workspace.ws3_flo]
+  depends_on = [null_resource.destroy_ws2, ibm_schematics_workspace.ws3_flo]
 }
 
 resource "null_resource" "destroy_ws2" {
@@ -535,7 +535,7 @@ resource "null_resource" "destroy_ws2" {
     EOT
   }
 
-  depends_on = [null_resource.destroy_ws3, ibm_schematics_workspace.ws2_cert_manager]
+  depends_on = [null_resource.destroy_ws1, ibm_schematics_workspace.ws2_cert_manager]
 }
 
 resource "null_resource" "destroy_ws1" {
@@ -576,5 +576,5 @@ resource "null_resource" "destroy_ws1" {
     EOT
   }
 
-  depends_on = [null_resource.destroy_ws2, ibm_schematics_workspace.ws1_roks_cluster]
+  depends_on = [ibm_schematics_workspace.ws1_roks_cluster]
 }
