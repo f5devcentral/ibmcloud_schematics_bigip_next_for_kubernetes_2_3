@@ -417,7 +417,7 @@ def reapply_orch_with_ws_outputs(orch_ws_id, variables, lf):
     )
 
 
-def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
+def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf, tf_var_map=None):
     """
     Read ws3 (FLO) outputs and inject them directly into ws4 (CNEInstance)
     variablestore. This avoids re-applying the orchestration workspace (which
@@ -489,8 +489,12 @@ def wire_ws3_outputs_into_ws4(ws3_id, ws4_id, lf):
             clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
             clean["value"] = remaining.pop(name)
         elif is_secure and not raw_val:
-            # Secure variable with masked value — omit "value" to preserve secret
+            # Secure variable with masked value.  IBM Cloud Schematics clears secure
+            # variables when their value is omitted from a workspace update, so we
+            # supply the known plaintext from tf_var_map when available.
             clean = {k: v[k] for k in ("name", "type", "secure") if k in v}
+            if tf_var_map and name in tf_var_map:
+                clean["value"] = tf_var_map[name]
         else:
             clean = {k: v[k] for k in ("name", "value", "type", "secure") if k in v}
         updated.append(clean)
@@ -1165,7 +1169,7 @@ def main():
                         ws4 = next((s for s in sub_workspaces if s["slot"] == 4), None)
                         if not ws4 or not ws4.get("id"):
                             raise RuntimeError("ws4 ID not found — cannot wire ws3 outputs")
-                        wire_ws3_outputs_into_ws4(sw["id"], ws4["id"], lf)
+                        wire_ws3_outputs_into_ws4(sw["id"], ws4["id"], lf, tf_var_map=var_map)
                         p_reapply.status = "PASS"
                     except Exception as exc:
                         p_reapply.status = "FAIL"
