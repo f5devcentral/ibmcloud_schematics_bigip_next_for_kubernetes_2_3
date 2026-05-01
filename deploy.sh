@@ -475,6 +475,45 @@ for p in json.load(sys.stdin):
     fi
 }
 
+# Before ws3 applies, check for orphaned Helm releases left behind when
+# Terraform state is wiped.  A fresh helm install would fail with
+# "cannot re-use a name that is still in use".
+cleanup_flo_helm_releases() {
+    local cluster_name flo_ns releases
+    cluster_name=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^openshift_cluster_name\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+" 2>/dev/null || true)
+    flo_ns=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^flo_namespace\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+print('f5-bnk')
+" 2>/dev/null || echo "f5-bnk")
+    [[ -n "$cluster_name" ]] || return 0
+    log "Checking for orphaned Helm releases in namespace $flo_ns (cluster: $cluster_name)"
+    ibmcloud ks cluster config --cluster "$cluster_name" --admin \
+        >> "$LOG_FILE" 2>&1 \
+        || { log "WARNING: could not get cluster config for Helm release cleanup"; return 0; }
+    releases=$(helm list -n "$flo_ns" --short 2>/dev/null || true)
+    if [[ -n "$releases" ]]; then
+        log "Uninstalling orphaned Helm releases in $flo_ns: $(echo "$releases" | tr '\n' ' ')"
+        while IFS= read -r rel; do
+            [[ -n "$rel" ]] || continue
+            helm uninstall "$rel" -n "$flo_ns" >> "$LOG_FILE" 2>&1 \
+                && log "Uninstalled Helm release: $rel" \
+                || log "WARNING: failed to uninstall Helm release: $rel"
+        done <<< "$releases"
+    else
+        log "No orphaned Helm releases in $flo_ns"
+    fi
+}
+
 # ── Deploy ────────────────────────────────────────────────────
 
 do_deploy() {
@@ -629,6 +668,7 @@ PYEOF
         section "WS3 — F5 Lifecycle Operator (FLO)"
         [[ -n "$ws3_id" ]] || die "ws3 ID missing — cannot proceed"
         cleanup_flo_trusted_profile
+        cleanup_flo_helm_releases
         run_plan  "$ws3_id" "ws3-flo"
         run_apply "$ws3_id" "ws3-flo"
     fi
