@@ -478,8 +478,18 @@ for p in json.load(sys.stdin):
 # Before ws3 applies, check for orphaned Helm releases left behind when
 # Terraform state is wiped.  A fresh helm install would fail with
 # "cannot re-use a name that is still in use".
+# Only cleans up if the ws3 workspace has no Terraform state (freshly created
+# or wiped); if state exists, the releases belong to a live apply.
 cleanup_flo_helm_releases() {
-    local cluster_name flo_ns releases
+    local ws3_id="$1"
+    local cluster_name flo_ns releases state_count
+    # Skip cleanup if ws3 already has Terraform state — releases are managed
+    state_count=$(ibmcloud schematics state list --id "$ws3_id" --output json 2>/dev/null \
+        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    if [[ "$state_count" -gt 0 ]]; then
+        log "ws3 workspace has Terraform state ($state_count resources) — skipping Helm release cleanup"
+        return 0
+    fi
     cluster_name=$(python3 -c "
 import re, sys
 with open('$TFVARS') as f:
@@ -512,6 +522,62 @@ print('f5-bnk')
     else
         log "No orphaned Helm releases in $flo_ns"
     fi
+}
+
+# Before ws6 applies, check for an orphaned client VPC left behind when
+# Terraform state is wiped.  CreateVPC would fail with "Name is not unique".
+# Only cleans up if ws6 has no Terraform state and the VPC is empty.
+cleanup_testing_client_vpc() {
+    local ws6_id="$1"
+    local vpc_name vpc_region state_count vpc_id subnet_count
+    state_count=$(ibmcloud schematics state list --id "$ws6_id" --output json 2>/dev/null \
+        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    if [[ "$state_count" -gt 0 ]]; then
+        log "ws6 workspace has Terraform state ($state_count resources) — skipping client VPC cleanup"
+        return 0
+    fi
+    vpc_name=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^testing_client_vpc_name\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+" 2>/dev/null || true)
+    vpc_region=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^testing_client_vpc_region\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+" 2>/dev/null || true)
+    [[ -n "$vpc_name" && -n "$vpc_region" ]] || return 0
+    log "Checking for orphaned client VPC '$vpc_name' in $vpc_region"
+    ibmcloud target -r "$vpc_region" >> "$LOG_FILE" 2>&1
+    vpc_id=$(ibmcloud is vpcs --output json 2>/dev/null \
+        | python3 -c "
+import json, sys
+for v in json.load(sys.stdin):
+    if v.get('name') == '$vpc_name':
+        print(v.get('id')); sys.exit()
+" 2>/dev/null || true)
+    ibmcloud target -r us-south >> "$LOG_FILE" 2>&1
+    if [[ -z "$vpc_id" ]]; then
+        log "No orphaned client VPC found"
+        return 0
+    fi
+    ibmcloud target -r "$vpc_region" >> "$LOG_FILE" 2>&1
+    subnet_count=$(ibmcloud is vpc "$vpc_id" --show-attached --output json 2>/dev/null \
+        | python3 -c "import json,sys; v=json.load(sys.stdin); print(len(v.get('subnets',[])))" 2>/dev/null || echo "99")
+    if [[ "$subnet_count" -gt 0 ]]; then
+        log "WARNING: orphaned client VPC $vpc_id has $subnet_count subnet(s) — cannot auto-delete; manual cleanup required"
+        ibmcloud target -r us-south >> "$LOG_FILE" 2>&1
+        return 0
+    fi
+    log "Deleting orphaned client VPC $vpc_id ($vpc_name) in $vpc_region"
+    ibmcloud is vpc-delete "$vpc_id" --force >> "$LOG_FILE" 2>&1 \
+        && log "Deleted orphaned client VPC $vpc_id" \
+        || log "WARNING: failed to delete orphaned client VPC $vpc_id"
+    ibmcloud target -r us-south >> "$LOG_FILE" 2>&1
 }
 
 # ── Deploy ────────────────────────────────────────────────────
@@ -668,7 +734,7 @@ PYEOF
         section "WS3 — F5 Lifecycle Operator (FLO)"
         [[ -n "$ws3_id" ]] || die "ws3 ID missing — cannot proceed"
         cleanup_flo_trusted_profile
-        cleanup_flo_helm_releases
+        cleanup_flo_helm_releases "$ws3_id"
         run_plan  "$ws3_id" "ws3-flo"
         run_apply "$ws3_id" "ws3-flo"
     fi
@@ -700,6 +766,7 @@ PYEOF
 
     section "WS6 — Testing Jumphosts"
     [[ -n "$ws6_id" ]] || die "ws6 ID missing — cannot proceed"
+    cleanup_testing_client_vpc "$ws6_id"
     run_plan  "$ws6_id" "ws6-testing"
     run_apply "$ws6_id" "ws6-testing"
 
