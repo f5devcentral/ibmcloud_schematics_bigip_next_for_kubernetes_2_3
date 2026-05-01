@@ -435,6 +435,46 @@ PYEOF
     log "ws4 variablestore patched"
 }
 
+# Delete any orphaned FLO trusted profile from a previous partial apply.
+# Schematics workspaces are recreated to pick up fresh template code, so the
+# Terraform state is wiped — but the IAM trusted profile persists in IBM Cloud.
+# A subsequent apply would fail with "Resource name must be unique".
+cleanup_flo_trusted_profile() {
+    local cluster_name flo_ns profile_name profile_id
+    cluster_name=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^openshift_cluster_name\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+" 2>/dev/null || true)
+    flo_ns=$(python3 -c "
+import re, sys
+with open('$TFVARS') as f:
+    for line in f:
+        m = re.match(r'^flo_namespace\s*=\s*\"([^\"]+)\"', line.strip())
+        if m: print(m.group(1)); sys.exit()
+print('f5-bnk')
+" 2>/dev/null || echo "f5-bnk")
+    [[ -n "$cluster_name" ]] || return 0
+    profile_name="${cluster_name}-f5-cne-controller-${flo_ns}"
+    log "Checking for orphaned trusted profile: $profile_name"
+    profile_id=$(ibmcloud iam trusted-profiles --output json 2>/dev/null \
+        | python3 -c "
+import json, sys
+for p in json.load(sys.stdin):
+    if p.get('name') == '$profile_name':
+        print(p['id']); sys.exit()
+" 2>/dev/null || true)
+    if [[ -n "$profile_id" ]]; then
+        log "Deleting orphaned trusted profile $profile_id ($profile_name)"
+        ibmcloud iam trusted-profile-delete "$profile_id" --force \
+            >> "$LOG_FILE" 2>&1 || true
+    else
+        log "No orphaned trusted profile found"
+    fi
+}
+
 # ── Deploy ────────────────────────────────────────────────────
 
 do_deploy() {
@@ -588,6 +628,7 @@ PYEOF
     if [[ "$ws3_enabled" == "true" ]]; then
         section "WS3 — F5 Lifecycle Operator (FLO)"
         [[ -n "$ws3_id" ]] || die "ws3 ID missing — cannot proceed"
+        cleanup_flo_trusted_profile
         run_plan  "$ws3_id" "ws3-flo"
         run_apply "$ws3_id" "ws3-flo"
     fi
