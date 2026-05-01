@@ -439,8 +439,16 @@ PYEOF
 # Schematics workspaces are recreated to pick up fresh template code, so the
 # Terraform state is wiped — but the IAM trusted profile persists in IBM Cloud.
 # A subsequent apply would fail with "Resource name must be unique".
+# Only cleans up if ws3 has no Terraform state (freshly created or wiped).
 cleanup_flo_trusted_profile() {
-    local cluster_name flo_ns profile_name profile_id
+    local ws3_id="$1"
+    local cluster_name flo_ns profile_name profile_id state_count
+    state_count=$(ibmcloud schematics state list --id "$ws3_id" --output json 2>/dev/null \
+        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    if [[ "$state_count" -gt 0 ]]; then
+        log "ws3 workspace has Terraform state ($state_count resources) — skipping trusted profile cleanup"
+        return 0
+    fi
     cluster_name=$(python3 -c "
 import re, sys
 with open('$TFVARS') as f:
@@ -733,7 +741,7 @@ PYEOF
     if [[ "$ws3_enabled" == "true" ]]; then
         section "WS3 — F5 Lifecycle Operator (FLO)"
         [[ -n "$ws3_id" ]] || die "ws3 ID missing — cannot proceed"
-        cleanup_flo_trusted_profile
+        cleanup_flo_trusted_profile "$ws3_id"
         cleanup_flo_helm_releases "$ws3_id"
         run_plan  "$ws3_id" "ws3-flo"
         run_apply "$ws3_id" "ws3-flo"
