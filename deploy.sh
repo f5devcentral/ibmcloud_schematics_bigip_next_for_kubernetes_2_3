@@ -444,7 +444,7 @@ cleanup_flo_trusted_profile() {
     local ws3_id="$1"
     local cluster_name flo_ns profile_name profile_id state_count
     state_count=$(ibmcloud schematics state list --id "$ws3_id" --output json 2>/dev/null \
-        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(len(t.get('resources',[])) for t in d))" 2>/dev/null || echo "0")
     if [[ "$state_count" -gt 0 ]]; then
         log "ws3 workspace has Terraform state ($state_count resources) — skipping trusted profile cleanup"
         return 0
@@ -493,7 +493,7 @@ cleanup_flo_helm_releases() {
     local cluster_name flo_ns releases state_count
     # Skip cleanup if ws3 already has Terraform state — releases are managed
     state_count=$(ibmcloud schematics state list --id "$ws3_id" --output json 2>/dev/null \
-        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(len(t.get('resources',[])) for t in d))" 2>/dev/null || echo "0")
     if [[ "$state_count" -gt 0 ]]; then
         log "ws3 workspace has Terraform state ($state_count resources) — skipping Helm release cleanup"
         return 0
@@ -539,7 +539,7 @@ cleanup_testing_client_vpc() {
     local ws6_id="$1"
     local vpc_name vpc_region state_count vpc_id subnet_count
     state_count=$(ibmcloud schematics state list --id "$ws6_id" --output json 2>/dev/null \
-        | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(len(t.get('resources',[])) for t in d))" 2>/dev/null || echo "0")
     if [[ "$state_count" -gt 0 ]]; then
         log "ws6 workspace has Terraform state ($state_count resources) — skipping client VPC cleanup"
         return 0
