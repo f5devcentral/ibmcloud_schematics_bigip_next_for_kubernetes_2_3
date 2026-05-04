@@ -280,6 +280,79 @@ ibmcloud schematics workspace delete --id $WS_ID --force
 
 ---
 
+## Local Test Suite
+
+`run_tests.sh` exercises the four deployment scenarios end-to-end (plan → apply → destroy) in isolated subdirectories and prints a PASS / FAIL summary. It drives `all_in_one.sh` per scenario, so it validates the full IBM Schematics CLI orchestration path that operators use in practice.
+
+`all_in_one.sh` is the single-deployment driver both `run_tests.sh` and operators can call directly:
+
+```bash
+./all_in_one.sh [terraform.tfvars]            # plan + apply ws1 → ws6
+./all_in_one.sh --destroy [terraform.tfvars]  # destroy ws6 → ws1
+```
+
+### Scenarios
+
+| ID | Label | `create_roks_cluster` | `create_roks_transit_gateway` | `install_cert_manager` | `deploy_bnk` |
+|----|-------|-----------------------|-------------------------------|------------------------|--------------|
+| 1 | `full` | true | true | true | true |
+| 2 | `existing-cluster-create-tgw` | false | true | false | true |
+| 3 | `existing-cluster-existing-tgw` | false | false | false | true |
+| 4 | `existing-cluster-create-tgw-existing-cert-manager` | false | true | false | true |
+
+Scenarios 2–4 share a one-time prereqs deployment that creates the ROKS cluster, Transit Gateway, and cert-manager and tears them down after the three scenarios finish. They therefore set `install_cert_manager=false` (a second install would collide on the same Helm release).
+
+Each scenario runs in its own subdirectory under `test-runs/<timestamp>/` with symlinked Terraform sources, so state files never collide. Resource names are suffixed per-run (`-tN-HHMM` per scenario, `-sHHMM` for the shared prereqs) so concurrent or back-to-back runs do not collide on IBM Cloud.
+
+### Prerequisites
+
+- A populated `terraform.tfvars` at the repo root — the suite reads it as the base and layers per-scenario overrides on top (`create_roks_cluster`, `roks_cluster_id_or_name`, unique resource-name suffixes, etc.).
+- `terraform` ≥ 1.5, `ibmcloud` CLI with the `schematics` plugin, and `python3` on `PATH`.
+- Authenticate before running: `ibmcloud login --apikey "$IBMCLOUD_API_KEY" -r "$IBMCLOUD_REGION"`.
+
+### Usage
+
+```bash
+# Run all four scenarios (default)
+./run_tests.sh
+
+# Run a single scenario by ID or label
+./run_tests.sh 1
+./run_tests.sh existing-cluster-create-tgw
+
+# Run multiple scenarios
+./run_tests.sh 2 3 4
+
+# Skip the destroy phases (leave resources up for inspection)
+./run_tests.sh --no-destroy 1
+
+# Pin the run output directory
+./run_tests.sh --run-dir test-runs/my-run 1
+
+# Clean up leftover Schematics workspaces from a crashed run
+./run_tests.sh --cleanup test-runs/20260504_120000
+```
+
+### Output layout
+
+```
+test-runs/<UTC-timestamp>/
+├── summary.log
+├── prereqs/                                   # shared cluster + TGW + cert-manager (scenarios 2–4)
+├── scenario-1-full/
+│   ├── terraform_full.tfvars
+│   ├── phase-plan.log
+│   ├── phase-apply.log
+│   ├── phase-destroy.log
+│   └── schematics-logs/                       # captured per workspace on apply/destroy failure
+└── scenario-2-existing-cluster-create-tgw/
+    └── ...
+```
+
+The summary table at the end of `summary.log` reports PASS / FAIL / SKIP for each scenario's plan, apply, and destroy phases. On apply or destroy failure the runner captures the most recent Schematics activity log for every involved workspace into `schematics-logs/wsN.log` so failures can be triaged without re-querying the API.
+
+---
+
 ## OCP Security Context Constraints Bindings Detail
 
 BIG-IP Next for Kubernetes required bindings grant `system:openshift:scc:privileged` for the following resources:
@@ -305,6 +378,8 @@ ibmcloud_schematics_bigip_next_for_kubernetes_2_3/
 ├── terraform.tfvars.example                 # All variables with default values
 ├── ibmcloud_cli_input_variables.json.example# Variables in Schematics JSON format
 ├── tfvars_to_schematics_input_json.py       # Converts terraform.tfvars → workspace.json
+├── all_in_one.sh                            # Single-deployment driver (Schematics CLI path)
+├── run_tests.sh                             # Test suite — drives all_in_one.sh across 4 scenarios
 ├── IBMCLOUD_CLI.md                          # IBM Cloud CLI deployment guide
 └── assets/
     └── images/                              # Architecture and feature diagrams
