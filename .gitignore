@@ -7,6 +7,17 @@ workspace.json
 
 # Lifecycle test output (reports contain outputs that may include sensitive values)
 test-reports/
+test-runs/
+deploy-logs/
+
+# Claude Code local settings
+.claude/
+
+# Terraform local state and provider artifacts
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
 
 # Python
 __pycache__/
