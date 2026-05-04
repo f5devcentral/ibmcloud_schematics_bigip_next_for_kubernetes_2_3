@@ -345,9 +345,9 @@ locals {
   ws3_outputs = (var.deploy_bnk && var.read_ws_outputs) ? try(data.ibm_schematics_output.ws3_flo[0].output_values, {}) : {}
 
   # Downstream wiring from ws3 — fall back to root variables when ws3 is skipped
-  ws3_flo_namespace                   = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
-  ws3_flo_trusted_profile_id          = try(local.ws3_outputs["flo_trusted_profile_id"], var.flo_trusted_profile_id)
-  ws3_flo_cluster_issuer_name         = try(local.ws3_outputs["flo_cluster_issuer_name"], var.flo_cluster_issuer_name)
+  ws3_flo_namespace           = try(local.ws3_outputs["flo_namespace"], var.flo_namespace)
+  ws3_flo_trusted_profile_id  = try(local.ws3_outputs["flo_trusted_profile_id"], var.flo_trusted_profile_id)
+  ws3_flo_cluster_issuer_name = try(local.ws3_outputs["flo_cluster_issuer_name"], var.flo_cluster_issuer_name)
   ws3_cneinstance_network_attachments = try(
     jsondecode(local.ws3_outputs["cneinstance_network_attachments"]),
     var.cneinstance_network_attachments != "" ? jsondecode(var.cneinstance_network_attachments) : ["ens3-ipvlan-l2", "macvlan-conf"]
@@ -667,6 +667,17 @@ resource "ibm_schematics_workspace" "ws6_testing" {
   }
 
   depends_on = [ibm_schematics_workspace.ws5_license]
+
+  lifecycle {
+    precondition {
+      condition = (
+        !var.testing_create_tgw_jumphost ||
+        var.create_roks_transit_gateway ||
+        var.roks_transit_gateway_name != "tf-tgw"
+      )
+      error_message = "roks_transit_gateway_name must be set to the name of an existing Transit Gateway when testing_create_tgw_jumphost = true and create_roks_transit_gateway = false."
+    }
+  }
 }
 
 data "ibm_schematics_output" "ws6_testing" {
