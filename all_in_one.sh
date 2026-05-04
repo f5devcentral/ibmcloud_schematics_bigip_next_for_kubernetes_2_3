@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# deploy.sh — BIG-IP Next for Kubernetes 2.3
+# all_in_one.sh — BIG-IP Next for Kubernetes 2.3
 #
 # Runs a full end-to-end deployment (or teardown) using the
 # local Terraform application + ibmcloud Schematics CLI.
@@ -25,12 +25,12 @@
 #   cluster state at plan time.
 #
 # Teardown:
-#   ./deploy.sh --destroy        (runs terraform destroy)
+#   ./all_in_one.sh --destroy [terraform.tfvars]
 #   The null_resource.destroy_wsN hooks created in step 2 fire the
 #   Schematics destroy API for ws6→ws1 in the correct reverse order.
 #
 # Usage:
-#   ./deploy.sh [terraform.tfvars] [--destroy]
+#   ./all_in_one.sh [terraform.tfvars] [--destroy]
 #
 # Prerequisites:
 #   terraform >= 1.5,  ibmcloud CLI + schematics plugin,  python3
@@ -57,8 +57,11 @@ readonly WS1_TIMEOUT=18000    # ROKS cluster can run close to 3 h
 readonly PLAN_RETRIES=2       # extra plan attempts on failure
 readonly PLAN_RETRY_WAIT=60   # seconds between plan retries
 readonly DESTROY_RETRIES=2    # extra destroy attempts on failure
-readonly READY_TIMEOUT=300    # seconds to wait for workspace to unlock
-readonly WS4_PRE_PLAN_WAIT=180  # seconds after ws3 apply before planning ws4
+readonly READY_TIMEOUT=1800   # 30 min — wait for workspace to unlock
+readonly TRANSITION_TIMEOUT=300  # 5 min — wait for submitted job to leave pre-status
+readonly WS4_PRE_PLAN_WAIT=180   # seconds after ws3 apply before planning ws4
+readonly UNKNOWN_REFRESH_AFTER=4  # consecutive UNKNOWNs before refreshing CLI auth
+readonly UNKNOWN_FAIL_AFTER=20    # consecutive UNKNOWNs before bailing (≈10 min)
 
 # ── Log setup ────────────────────────────────────────────────
 LOG_DIR="deploy-logs"
@@ -77,8 +80,28 @@ section() {
 
 die() {
     printf '\nFATAL: %s\n' "$*" | tee -a "$LOG_FILE" >&2
-    printf '\nTo destroy partially-created resources:\n  terraform destroy -auto-approve\n' >&2
+    printf '\nTo destroy partially-created resources:\n  ./all_in_one.sh --destroy %s\n' "$TFVARS" >&2
     exit 1
+}
+
+# Re-authenticate the ibmcloud CLI using the API key from tfvars.
+# Long Schematics jobs (>1 h) outlast the IAM token's TTL, after which
+# `ibmcloud schematics workspace get` starts returning malformed JSON
+# and our status poller flips to UNKNOWN forever.  Call this whenever
+# we see consecutive UNKNOWN responses to recover transparently.
+refresh_login() {
+    local key
+    key=$(python3 - "$TFVARS" << 'PY' 2>/dev/null
+import re, sys
+with open(sys.argv[1]) as f:
+    for line in f:
+        m = re.match(r'^\s*ibmcloud_api_key\s*=\s*"([^"]+)"', line)
+        if m:
+            print(m.group(1)); break
+PY
+)
+    [[ -n "$key" ]] || { log "WARNING: could not extract ibmcloud_api_key from $TFVARS — skipping re-login"; return 1; }
+    ibmcloud login --apikey "$key" -r "${IBMCLOUD_SCHEMATICS_REGION:-us-south}" -q >> "$LOG_FILE" 2>&1
 }
 
 # ── Workspace status helpers ─────────────────────────────────
@@ -134,9 +157,16 @@ wait_ready() {
 # Only the final status word is written to stdout (for capture via $()).
 # Progress lines go to stderr so they reach the terminal without polluting
 # the captured value when called as status=$(poll_terminal ...).
+#
+# Resilience: if ws_status returns UNKNOWN $UNKNOWN_REFRESH_AFTER times in a
+# row, refresh the ibmcloud CLI login (token may have expired during a long
+# job).  After $UNKNOWN_FAIL_AFTER consecutive UNKNOWNs we give up and report
+# UNKNOWN as the final status — the caller treats this as a failure rather
+# than spinning the full JOB_TIMEOUT (which previously hung scenarios for hours
+# when the CLI session lapsed).
 poll_terminal() {
     local ws_id="$1" label="$2" timeout="${3:-$JOB_TIMEOUT}"
-    local elapsed=0
+    local elapsed=0 unknown_streak=0
     while (( elapsed < timeout )); do
         local status
         status=$(ws_status "$ws_id")
@@ -144,6 +174,22 @@ poll_terminal() {
             printf '\n' >&2
             echo "$status"
             return 0
+        fi
+        if [[ "$status" == "UNKNOWN" ]]; then
+            (( unknown_streak++ )) || true
+            if (( unknown_streak == UNKNOWN_REFRESH_AFTER )); then
+                printf '\n' >&2
+                log "  $unknown_streak consecutive UNKNOWN — refreshing ibmcloud CLI login"
+                refresh_login || true
+            fi
+            if (( unknown_streak >= UNKNOWN_FAIL_AFTER )); then
+                printf '\n' >&2
+                log "  $unknown_streak consecutive UNKNOWN responses — bailing out of $label poll"
+                echo "UNKNOWN"
+                return 0
+            fi
+        else
+            unknown_streak=0
         fi
         printf '\r  [%-22s] %5ds  status=%-10s    ' "$label" "$elapsed" "$status" >&2
         sleep "$POLL_INTERVAL"
@@ -161,7 +207,7 @@ poll_terminal() {
 wait_for_transition() {
     local ws_id="$1" pre_status="$2" label="$3"
     local elapsed=0
-    while (( elapsed < 120 )); do
+    while (( elapsed < TRANSITION_TIMEOUT )); do
         local status
         status=$(ws_status "$ws_id")
         if [[ "$status" != "$pre_status" ]]; then
@@ -173,7 +219,7 @@ wait_for_transition() {
         (( elapsed += 5 ))
     done
     printf '\n' >&2
-    log "WARNING: $label status did not change from $pre_status after 120s — proceeding"
+    log "WARNING: $label status did not change from $pre_status after ${TRANSITION_TIMEOUT}s — proceeding"
 }
 
 # ── Job runners ──────────────────────────────────────────────
@@ -829,7 +875,7 @@ PYEOF
     log "All workspaces applied successfully."
     log ""
     log "To tear down:"
-    log "  terraform destroy -auto-approve"
+    log "  ./all_in_one.sh --destroy $TFVARS"
     log ""
     log "Log: $LOG_FILE"
 }
