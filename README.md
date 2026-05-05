@@ -282,7 +282,15 @@ ibmcloud schematics workspace delete --id $WS_ID --force
 
 ## Local Test Suite
 
-`run_tests.sh` exercises the four deployment scenarios end-to-end (plan → apply → destroy) in isolated subdirectories and prints a PASS / FAIL summary. It drives `all_in_one.sh` per scenario, so it validates the full IBM Schematics CLI orchestration path that operators use in practice.
+`run_tests.sh` exercises the four deployment scenarios end-to-end and prints a PASS / FAIL summary. Each scenario runs three phases in sequence:
+
+| Phase | What `run_tests.sh` does | Logged to |
+|-------|--------------------------|-----------|
+| `plan` | `terraform init` + `terraform plan` against this orchestration module (no Schematics calls) | `phase-plan.log` |
+| `apply` | `./all_in_one.sh <tfvars>` — drives ws1→ws6 plan/apply via the Schematics CLI | `phase-apply.log` |
+| `destroy` | `./all_in_one.sh --destroy <tfvars>` — fires the `destroy_wsN` hooks (ws6→ws1) and removes the orchestration workspace records | `phase-destroy.log` |
+
+A failed plan skips that scenario's apply and destroy. A failed apply still attempts a cleanup destroy (unless `--no-destroy` is set).
 
 `all_in_one.sh` is the single-deployment driver both `run_tests.sh` and operators can call directly:
 
@@ -328,9 +336,6 @@ Each scenario runs in its own subdirectory under `test-runs/<timestamp>/` with s
 
 # Pin the run output directory
 ./run_tests.sh --run-dir test-runs/my-run 1
-
-# Clean up leftover Schematics workspaces from a crashed run
-./run_tests.sh --cleanup test-runs/20260504_120000
 ```
 
 ### Output layout
@@ -339,12 +344,18 @@ Each scenario runs in its own subdirectory under `test-runs/<timestamp>/` with s
 test-runs/<UTC-timestamp>/
 ├── summary.log
 ├── prereqs/                                   # shared cluster + TGW + cert-manager (scenarios 2–4)
+│   ├── terraform_prereqs.tfvars
+│   ├── phase-setup.log
+│   └── phase-teardown.log
 ├── scenario-1-full/
-│   ├── terraform_full.tfvars
+│   ├── terraform_full.tfvars                  # base tfvars + scenario overrides
+│   ├── main.tf, variables.tf, ...             # symlinks to repo root
+│   ├── all_in_one.sh                          # symlink to repo root
 │   ├── phase-plan.log
 │   ├── phase-apply.log
 │   ├── phase-destroy.log
-│   └── schematics-logs/                       # captured per workspace on apply/destroy failure
+│   ├── deploy-logs/                           # all_in_one.sh per-workspace logs
+│   └── schematics-logs/                       # captured on apply/destroy failure only
 └── scenario-2-existing-cluster-create-tgw/
     └── ...
 ```
@@ -372,14 +383,16 @@ ibmcloud_schematics_bigip_next_for_kubernetes_2_3/
 ├── main.tf                                  # 6 Schematics workspace resources + output data sources + locals
 ├── variables.tf                             # Root module input variables
 ├── outputs.tf                               # Root module outputs (ws1–ws6)
-├── jobs.tf                                  # Plan, apply, and destroy job orchestration
+├── jobs.tf                                  # Schematics sub-workspace destroy hooks (ws6 → ws1)
 ├── providers.tf                             # IBM Cloud provider configuration
 ├── versions.tf                              # Terraform and provider version constraints
 ├── terraform.tfvars.example                 # All variables with default values
 ├── ibmcloud_cli_input_variables.json.example# Variables in Schematics JSON format
 ├── tfvars_to_schematics_input_json.py       # Converts terraform.tfvars → workspace.json
 ├── all_in_one.sh                            # Single-deployment driver (Schematics CLI path)
-├── run_tests.sh                             # Test suite — drives all_in_one.sh across 4 scenarios
+├── run_tests.sh                             # Test suite — runs 4 scenarios via all_in_one.sh
+├── schematics_runner.py                     # Full lifecycle runner — creates the orchestration
+│                                            #   workspace and drives ws1→ws6 via Schematics CLI
 ├── IBMCLOUD_CLI.md                          # IBM Cloud CLI deployment guide
 └── assets/
     └── images/                              # Architecture and feature diagrams
