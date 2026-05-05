@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# `sys` is a CPython builtin and loads without consulting the path importer.
+# Strip CWD-relative entries from sys.path so subsequent stdlib imports survive
+# being launched from an unlinked working directory.
+import sys as _sys
+_sys.path[:] = [_p for _p in _sys.path if _p not in ("", ".")]
+
 import json, re, sys
 
 SECURE_VARS = {"ibmcloud_api_key", "bigip_password"}
