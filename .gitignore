@@ -12,6 +12,7 @@ deploy-logs/
 
 # Claude Code local settings
 .claude/
+CLAUDE.md
 
 # Terraform local state and provider artifacts
 .terraform/
