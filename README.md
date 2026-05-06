@@ -2,7 +2,7 @@
 
 ## About This Workspace
 
-This repository is the **orchestration layer** for deploying BIG-IP Next for Kubernetes 2.3 on an IBM Cloud ROKS cluster. It corresponds to the F5 engineering March 30th, 2026 demonstration of BIG-IP Next for Kubernetes installed in IBM Cloud ROKS clusters.
+This repository is the **orchestration layer** for deploying BIG-IP Next for Kubernetes 2.3 on an IBM Cloud ROKS cluster. It corresponds to the 2.3 release of BIG-IP Next for Kubernetes installed in IBM Cloud ROKS clusters.
 
 It is a single Terraform module that, when applied, creates **six child IBM Cloud Schematics workspaces** — one per deployment stage. Each child workspace pulls its own template repo, holds its own state, and is planned, applied, and destroyed in dependency order.
 
