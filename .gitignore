@@ -13,6 +13,7 @@ deploy-logs/
 # Environment files
 .env
 .env.*
+make_dot_envs.sh
 
 # Claude Code local settings
 .claude/
