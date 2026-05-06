@@ -32,12 +32,12 @@ Outputs from each child workspace are read by the orchestration workspace and fo
 
 | Child workspace | Role | Template repo (default branch: `main`) |
 |-----------------|------|------------------------------------------|
-| ws1 | ROKS cluster + Transit Gateway + registry COS      | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18> |
-| ws2 | cert-manager Helm install                          | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager> |
-| ws3 | F5 Lifecycle Operator + CIS + IAM Trusted Profile  | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo> |
-| ws4 | CNEInstance custom resource                        | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance> |
-| ws5 | License custom resource                            | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_license> |
-| ws6 | Jumphost test infrastructure                       | <https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_testing> |
+| ws1 | ROKS cluster + Transit Gateway + registry COS      | [ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18) |
+| ws2 | cert-manager Helm install                          | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager) |
+| ws3 | F5 Lifecycle Operator + CIS + IAM Trusted Profile  | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo) |
+| ws4 | CNEInstance custom resource                        | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance) |
+| ws5 | License custom resource                            | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_license](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_license) |
+| ws6 | Jumphost test infrastructure                       | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_testing](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_testing) |
 
 Each child workspace's repo URL and branch can be overridden via the `*_template_repo_url` / `*_template_repo_branch` variables (see [Template repo URLs](#template-repo-urls)) — useful for testing forks or feature branches.
 
