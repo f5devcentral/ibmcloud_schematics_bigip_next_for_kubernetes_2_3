@@ -10,6 +10,10 @@ test-reports/
 test-runs/
 deploy-logs/
 
+# Environment files
+.env
+.env.*
+
 # Claude Code local settings
 .claude/
 CLAUDE.md
