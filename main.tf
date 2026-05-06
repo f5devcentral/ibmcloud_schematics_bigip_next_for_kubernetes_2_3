@@ -2,7 +2,7 @@
 # F5 BIG-IP Next for Kubernetes 2.3 — Orchestration Workspace
 #
 # Execution order:
-#   ws1  roks_cluster_4_18     — ROKS cluster + Transit Gateway
+#   ws1  roks_cluster_4        — ROKS cluster + Transit Gateway
 #   ws2  cert_manager          — cert-manager Helm install
 #   ws3  flo                   — F5 Lifecycle Operator
 #   ws4  cneinstance           — CNEInstance custom resource

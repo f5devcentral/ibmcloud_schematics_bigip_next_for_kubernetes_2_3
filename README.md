@@ -32,7 +32,7 @@ Outputs from each child workspace are read by the orchestration workspace and fo
 
 | Child workspace | Role | Template repo (default branch: `main`) |
 |-----------------|------|------------------------------------------|
-| ws1 | ROKS cluster + Transit Gateway + registry COS      | [ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18) |
+| ws1 | ROKS cluster + Transit Gateway + registry COS      | [ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4) |
 | ws2 | cert-manager Helm install                          | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager) |
 | ws3 | F5 Lifecycle Operator + CIS + IAM Trusted Profile  | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo) |
 | ws4 | CNEInstance custom resource                        | [ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance](https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance) |
@@ -455,7 +455,7 @@ By default each child workspace pulls from the corresponding `f5devcentral` GitH
 
 | Variable | Default |
 |----------|---------|
-| `roks_cluster_template_repo_url` | `https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4_18` |
+| `roks_cluster_template_repo_url` | `https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_roks_cluster_4` |
 | `cert_manager_template_repo_url` | `https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cert_manager` |
 | `flo_template_repo_url` | `https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_flo` |
 | `cneinstance_template_repo_url` | `https://github.com/f5devcentral/ibmcloud_schematics_bigip_next_for_kubernetes_2_3_cneinstance` |
