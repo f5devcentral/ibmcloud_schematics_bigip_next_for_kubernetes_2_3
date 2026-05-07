@@ -120,7 +120,7 @@ A VPC-deployed BIG-IP Virtual Edition with DNS Services should be deployed in an
 |----------|-------------|---------|
 | `bigip_username` | BIG-IP username for the CIS controller | `admin` (default) |
 | `bigip_password` | BIG-IP password for the CIS controller | (sensitive) |
-| `bigip_url` | BIG-IP iControl REST URL | `https://10.100.100.22` |
+| `bigip_url` | BIG-IP iControl REST URL | `https://192.168.1.245` |
 
 The CIS controller, running inside the ROKS cluster, must be able to resolve the URL host and reach the iControl REST endpoint.
 
@@ -413,14 +413,14 @@ This deployment is modular. The flags below select which child workspaces are cr
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `far_repo_url` | FAR repository URL for Docker and Helm images | REQUIRED with default | `repo.f5.com` |
-| `f5_bigip_k8s_manifest_version` | Version of the f5-bigip-k8s-manifest chart. FLO and CIS versions are extracted from this | **REQUIRED** | `2.3.0-bnpp-ehf-2-3.2598.3-0.0.17` |
+| `f5_bigip_k8s_manifest_version` | Version of the f5-bigip-k8s-manifest chart. FLO and CIS versions are extracted from this | **REQUIRED** | `2.3.0-3.2598.3-0.0.170` |
 | `f5_cne_far_auth_file` | FAR auth key filename in the COS bucket (.tgz) | REQUIRED with default | `f5-far-auth-key.tgz` |
 | `f5_cne_subscription_jwt_file` | Subscription JWT filename in the COS bucket | REQUIRED with default | `trial.jwt` |
 | `flo_namespace` | Kubernetes namespace for the F5 Lifecycle Operator | REQUIRED with default | `f5-bnk` |
 | `flo_utils_namespace` | Kubernetes namespace for F5 utility components | REQUIRED with default | `f5-utils` |
 | `bigip_username` | BIG-IP username for the CIS controller. Leave blank if not using CIS | REQUIRED with default | `admin` |
-| `bigip_password` | BIG-IP password for the CIS controller. Leave blank if not using CIS | Conditional | `""` |
-| `bigip_url` | BIG-IP URL for the CIS controller. Leave blank if not using CIS | Conditional | `""` |
+| `bigip_password` | BIG-IP password for the CIS controller. Leave blank if not using CIS | Conditional | `"admin"` |
+| `bigip_url` | BIG-IP URL for the CIS controller. Leave blank if not using CIS | Conditional | `"https://192.168.1.245"` |
 
 ### ws4 — CNEInstance
 

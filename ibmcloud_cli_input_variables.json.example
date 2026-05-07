@@ -136,7 +136,7 @@
     },
     {
       "name": "f5_bigip_k8s_manifest_version",
-      "value": "2.3.0-bnpp-ehf-2-3.2598.3-0.0.17",
+      "value": "2.3.0-3.2598.3-0.0.170",
       "description": "Version of the f5-bigip-k8s-manifest chart. FLO and CIS versions are extracted from this."
     },
     {
@@ -166,13 +166,13 @@
     },
     {
       "name": "bigip_password",
-      "value": "",
+      "value": "admin",
       "secure": true,
       "description": "BIG-IP password for the CIS controller. Leave blank if not using CIS."
     },
     {
       "name": "bigip_url",
-      "value": "",
+      "value": "https://192.168.1.245",
       "description": "BIG-IP URL for the CIS controller. Leave blank if not using CIS."
     },
     {
