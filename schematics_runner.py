@@ -218,6 +218,11 @@ def ensure_ibmcloud_login(tfvars_path, lf=None):
     Verify the ibmcloud CLI is authenticated; if not, auto-login using
     ibmcloud_api_key + ibmcloud_schematics_region from tfvars_path.
 
+    Always retargets the CLI to ibmcloud_schematics_region from tfvars (even
+    when already authed) — Schematics rejects `workspace new` with a generic
+    400 when the payload's `location` field does not match the CLI-targeted
+    Schematics region.
+
     Raises RuntimeError if the tfvars file is missing, the api key is blank,
     or `ibmcloud login` itself fails.
     """
@@ -226,10 +231,23 @@ def ensure_ibmcloud_login(tfvars_path, lf=None):
             "ibmcloud CLI not found in PATH — install from "
             "https://cloud.ibm.com/docs/cli?topic=cli-install-ibmcloud-cli"
         )
+
+    region = "us-south"
+    if Path(tfvars_path).exists():
+        tfvars_map = {v["name"]: v["value"] for v in parse_tfvars(tfvars_path)}
+        region = tfvars_map.get("ibmcloud_schematics_region", "us-south").strip() or "us-south"
+
     rc, _, _ = run_cmd("ibmcloud iam oauth-tokens")
     if rc == 0:
         tee("  ibmcloud CLI authenticated", lf)
+        # Already authed — make sure the targeted region matches the tfvars
+        # Schematics region so workspace creation does not 400.
+        rc_t, _, err_t = run_cmd(f"ibmcloud target -r {region}", lf=lf)
+        if rc_t != 0:
+            raise RuntimeError(f"ibmcloud target -r {region} failed: {err_t.strip() or 'unknown error'}")
+        tee(f"  Targeted region {region}", lf)
         return
+
     tee("  Not authenticated — logging in with API key from tfvars", lf)
     if not Path(tfvars_path).exists():
         raise RuntimeError(
@@ -238,7 +256,6 @@ def ensure_ibmcloud_login(tfvars_path, lf=None):
         )
     tfvars_map = {v["name"]: v["value"] for v in parse_tfvars(tfvars_path)}
     api_key = tfvars_map.get("ibmcloud_api_key", "").strip()
-    region  = tfvars_map.get("ibmcloud_schematics_region", "us-south").strip() or "us-south"
     if not api_key:
         raise RuntimeError(
             f"ibmcloud_api_key missing or empty in {tfvars_path}. "
