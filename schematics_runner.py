@@ -47,6 +47,7 @@ _sys.path[:] = [_p for _p in _sys.path if _p not in ("", ".")]
 import ast
 import json
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -210,6 +211,45 @@ def parse_tfvars(path):
                 entry["secure"] = True
             variables.append(entry)
     return variables
+
+
+def ensure_ibmcloud_login(tfvars_path, lf=None):
+    """
+    Verify the ibmcloud CLI is authenticated; if not, auto-login using
+    ibmcloud_api_key + ibmcloud_schematics_region from tfvars_path.
+
+    Raises RuntimeError if the tfvars file is missing, the api key is blank,
+    or `ibmcloud login` itself fails.
+    """
+    if shutil.which("ibmcloud") is None:
+        raise RuntimeError(
+            "ibmcloud CLI not found in PATH — install from "
+            "https://cloud.ibm.com/docs/cli?topic=cli-install-ibmcloud-cli"
+        )
+    rc, _, _ = run_cmd("ibmcloud iam oauth-tokens")
+    if rc == 0:
+        tee("  ibmcloud CLI authenticated", lf)
+        return
+    tee("  Not authenticated — logging in with API key from tfvars", lf)
+    if not Path(tfvars_path).exists():
+        raise RuntimeError(
+            f"{tfvars_path} not found — cannot auto-login. "
+            "Run: ibmcloud login --apikey YOUR_API_KEY -r REGION"
+        )
+    tfvars_map = {v["name"]: v["value"] for v in parse_tfvars(tfvars_path)}
+    api_key = tfvars_map.get("ibmcloud_api_key", "").strip()
+    region  = tfvars_map.get("ibmcloud_schematics_region", "us-south").strip() or "us-south"
+    if not api_key:
+        raise RuntimeError(
+            f"ibmcloud_api_key missing or empty in {tfvars_path}. "
+            "Run: ibmcloud login --apikey YOUR_API_KEY -r REGION"
+        )
+    # -q suppresses the interactive account-selection prompt; the api key
+    # uniquely identifies the account so no choice is needed.
+    rc2, _, err2 = run_cmd(f"ibmcloud login --apikey {api_key} -r {region} -q", lf=lf)
+    if rc2 != 0:
+        raise RuntimeError(f"ibmcloud login failed: {err2.strip() or 'unknown error'}")
+    tee(f"  Logged in to region {region}", lf)
 
 
 def build_workspace_json(variables, ts_label, branch="main"):
@@ -780,7 +820,8 @@ def show_workspace_tree(tfvars_path):
         return 1
     try:
         data    = json.loads(out)
-        ws_list = data.get("workspaces", []) if isinstance(data, dict) else (data or [])
+        ws_list = data.get("workspaces") if isinstance(data, dict) else data
+        ws_list = ws_list or []
     except json.JSONDecodeError as exc:
         print(f"\n  ERROR: could not parse workspace list JSON: {exc}\n{sep}\n")
         return 1
@@ -947,6 +988,11 @@ def main():
     args = parser.parse_args()
 
     if args.list:
+        try:
+            ensure_ibmcloud_login(args.tfvars)
+        except Exception as exc:
+            print(f"ERROR: {exc}")
+            return 1
         return show_workspace_tree(args.tfvars)
 
     if args.outputs:
@@ -955,6 +1001,11 @@ def main():
                 "ERROR: --ws-id is required with --outputs\n"
                 "       Use --list to find the orchestration workspace ID."
             )
+            return 1
+        try:
+            ensure_ibmcloud_login(args.tfvars)
+        except Exception as exc:
+            print(f"ERROR: {exc}")
             return 1
         return show_outputs(args.ws_id)
 
@@ -1046,32 +1097,7 @@ def main():
         p = Phase("preflight")
         t0 = time.time()
         try:
-            rc, out, err = run_cmd("ibmcloud iam oauth-tokens")
-            if rc != 0:
-                tee("  Not authenticated — logging in with API key from tfvars", lf)
-                if not Path(tfvars_path).exists():
-                    raise RuntimeError(
-                        f"{tfvars_path} not found — cannot auto-login. "
-                        "Run: ibmcloud login --apikey YOUR_API_KEY -r REGION"
-                    )
-                tfvars_map = {v["name"]: v["value"] for v in parse_tfvars(tfvars_path)}
-                api_key = tfvars_map.get("ibmcloud_api_key", "").strip()
-                region  = tfvars_map.get("ibmcloud_schematics_region", "us-south").strip() or "us-south"
-                if not api_key:
-                    raise RuntimeError(
-                        f"ibmcloud_api_key missing or empty in {tfvars_path}. "
-                        "Run: ibmcloud login --apikey YOUR_API_KEY -r REGION"
-                    )
-                # -q suppresses the interactive account-selection prompt; the
-                # api key uniquely identifies the account so no choice is needed.
-                rc2, _, err2 = run_cmd(
-                    f"ibmcloud login --apikey {api_key} -r {region} -q", lf=lf
-                )
-                if rc2 != 0:
-                    raise RuntimeError(f"ibmcloud login failed: {err2.strip() or 'unknown error'}")
-                tee(f"  Logged in to region {region}", lf)
-            else:
-                tee("  ibmcloud CLI authenticated", lf)
+            ensure_ibmcloud_login(tfvars_path, lf=lf)
             p.status = "PASS"
         except Exception as exc:
             p.status = "FAIL"
