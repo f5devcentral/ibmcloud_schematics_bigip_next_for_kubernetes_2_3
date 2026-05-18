@@ -80,6 +80,7 @@ VALID_PHASES = [
     "plan-orch",     # plan orchestration workspace
     "apply-orch",    # apply orchestration workspace (creates sub-workspaces)
     "sub-ws",        # plan then apply each sub-workspace ws1→ws6
+    "wire-outputs",  # re-apply orch with read_ws_outputs=true → combined outputs
     "destroy-sub",   # destroy sub-workspaces ws6→ws1
     "destroy-orch",  # destroy orchestration workspace
     "delete",        # delete orchestration workspace record
@@ -561,14 +562,17 @@ def reapply_orch_with_ws_outputs(orch_ws_id, variables, lf):
     """
     Switch read_ws_outputs → true in the orchestration workspace and re-apply it.
 
-    This causes Terraform to read ws3 outputs and wire flo_trusted_profile_id /
-    flo_cluster_issuer_name into ws4 and ws5 template_inputs before those
-    workspaces run their own plan/apply.
+    This causes Terraform to read every sub-workspace's outputs so the
+    orchestration workspace can emit its combined outputs (outputs.tf, all of
+    which derive from local.wsN_outputs and are null while read_ws_outputs is
+    false).
 
-    NOTE: this function is retained but not used in the current lifecycle flow.
-    wire_ws3_outputs_into_ws4() is used instead because re-applying the
-    orchestration workspace at the ws3-done point fails — it also attempts to
-    read ws4/ws5/ws6 outputs, which have no statefiles yet.
+    Called by the `wire-outputs` phase, which runs only after every
+    sub-workspace has applied and has a statefile.  It must NOT be called
+    earlier (e.g. at the ws3-done point): the orchestration Terraform also
+    reads ws4/ws5/ws6 outputs, and those reads fail until those workspaces
+    have statefiles.  wire_ws3_outputs_into_ws4() handles the earlier
+    ws3→ws4 wiring instead.
     """
     # Patch variables: force read_ws_outputs to true
     patched = False
@@ -961,6 +965,8 @@ def main():
             "  plan-orch    plan orchestration workspace\n"
             "  apply-orch   apply orchestration workspace (creates sub-workspaces)\n"
             "  sub-ws       plan then apply each sub-workspace ws1→ws6\n"
+            "  wire-outputs re-apply orch with read_ws_outputs=true so it emits\n"
+            "               the combined outputs aggregated from all sub-workspaces\n"
             "  destroy-sub  destroy sub-workspaces ws6→ws1\n"
             "  destroy-orch destroy orchestration workspace\n"
             "  delete       delete orchestration workspace record\n"
@@ -970,7 +976,12 @@ def main():
             "\n"
             "  # create + plan + apply only, no destroy\n"
             "  python3 schematics_runner.py ./terraform.tfvars \\\n"
-            "      --phases create plan-orch apply-orch sub-ws\n"
+            "      --phases create plan-orch apply-orch sub-ws wire-outputs\n"
+            "\n"
+            "  # populate combined outputs on an already-applied workspace\n"
+            "  python3 schematics_runner.py ./terraform.tfvars \\\n"
+            "      --ws-id us-south.workspace.bnk-23-test-xxx.abc123 \\\n"
+            "      --phases wire-outputs\n"
             "\n"
             "  # destroy an already-applied workspace by ID\n"
             "  python3 schematics_runner.py ./terraform.tfvars \\\n"
@@ -1033,7 +1044,8 @@ def main():
 
     # --ws-id is required when 'create' is not selected but later phases need
     # the orchestration workspace.
-    needs_ws = run & {"plan-orch", "apply-orch", "sub-ws", "destroy-sub", "destroy-orch", "delete"}
+    needs_ws = run & {"plan-orch", "apply-orch", "sub-ws", "wire-outputs",
+                      "destroy-sub", "destroy-orch", "delete"}
     if "create" not in run and needs_ws and not args.ws_id:
         print(
             "ERROR: --ws-id is required when 'create' is not in --phases\n"
@@ -1435,6 +1447,51 @@ def main():
                         tee(f"  ERROR: {exc}", lf)
                     p_reapply.duration = int(time.time() - t0)
                     phases.append(p_reapply)
+
+        # ── Phase: wire-outputs ───────────────────────────────────────────
+        #
+        # The orchestration workspace's outputs (outputs.tf) all derive from
+        # local.wsN_outputs, which are populated only when read_ws_outputs is
+        # true.  apply-orch runs with read_ws_outputs=false (the sub-workspaces
+        # have no statefiles at that point), so the orchestration workspace
+        # initially emits no outputs.  Now that every enabled sub-workspace has
+        # applied and has a statefile, re-apply the orchestration workspace with
+        # read_ws_outputs=true so its data.ibm_schematics_output reads succeed
+        # and it produces the combined outputs.  On success, populate `outputs`
+        # so the end-of-run report shows them.
+        if "wire-outputs" in run:
+            p_wire = Phase("wire-outputs (orch combined outputs)")
+            t0 = time.time()
+            sub_apply_failed = any(
+                ph.name.startswith("apply ws") and ph.status == "FAIL"
+                for ph in phases
+            )
+            if not orch_ws_id:
+                p_wire.status = "SKIP"
+                p_wire.error  = "no orchestration workspace ID"
+            elif "sub-ws" in run and sub_apply_failed:
+                p_wire.status = "SKIP"
+                p_wire.error  = "skipped — a sub-workspace apply failed"
+            else:
+                section("Re-applying orchestration workspace (read_ws_outputs → true)")
+                try:
+                    passed, final_status, elapsed = reapply_orch_with_ws_outputs(
+                        orch_ws_id, variables, lf
+                    )
+                    tee(f"  Final status : {final_status}  ({elapsed}s)", lf)
+                    if passed:
+                        p_wire.status = "PASS"
+                        outputs = fetch_outputs(orch_ws_id, lf)
+                        tee(f"  Combined outputs fetched: {len(outputs)}", lf)
+                    else:
+                        p_wire.status = "FAIL"
+                        p_wire.error  = f"status after reapply: {final_status}"
+                except Exception as exc:
+                    p_wire.status = "FAIL"
+                    p_wire.error  = str(exc)
+                    tee(f"  ERROR: {exc}", lf)
+            p_wire.duration = int(time.time() - t0)
+            phases.append(p_wire)
 
         # ── Phase: destroy-sub (ws6→ws1) ──────────────────────────────────
         #
