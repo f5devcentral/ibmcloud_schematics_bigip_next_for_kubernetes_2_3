@@ -1162,12 +1162,39 @@ def main():
             ws           = build_workspace_json(variables, ts_label, branch=branch)
             orch_ws_name = ws["name"]
 
+            # Suffix used to build sub-workspace names.  For a fresh run this is
+            # this run's ts_label.  When resuming an existing orchestration
+            # workspace (--ws-id) the sub-workspaces were created by the
+            # *original* run with *its* suffix, so a fresh ts_label would never
+            # match — derive the suffix from the existing workspace instead.
+            sub_ws_suffix = ts_label
+
             # When resuming an existing workspace (--ws-id), fetch its actual
             # name for the report rather than the name we would have created.
             if orch_ws_id:
                 try:
                     d = ibmcloud_json(f"ibmcloud schematics workspace get --id {orch_ws_id}", lf)
                     orch_ws_name = d.get("name", orch_ws_id)
+
+                    # Prefer the ws_name_suffix the original run injected into
+                    # the orchestration variablestore — that is exactly the
+                    # value passed to the sub-workspace module.  Fall back to
+                    # parsing it from the orchestration workspace name
+                    # (bnk-23-test-<suffix>).
+                    orch_suffix = None
+                    for td in (d.get("template_data") or []):
+                        for v in (td.get("variablestore") or []):
+                            if v.get("name") == "ws_name_suffix" and v.get("value"):
+                                orch_suffix = v["value"]
+                                break
+                        if orch_suffix:
+                            break
+                    if not orch_suffix:
+                        orch_prefix = "bnk-23-test-"
+                        if orch_ws_name.startswith(orch_prefix):
+                            orch_suffix = orch_ws_name[len(orch_prefix):]
+                    if orch_suffix:
+                        sub_ws_suffix = orch_suffix
                 except Exception:
                     orch_ws_name = orch_ws_id
 
@@ -1175,7 +1202,7 @@ def main():
 
             for slot, ws_base_name, ctrl_var in SUB_WORKSPACE_DEFS:
                 enabled = bool_var(var_map, ctrl_var)
-                ws_name = f"{ws_base_name}-{ts_label}"
+                ws_name = f"{ws_base_name}-{sub_ws_suffix}"
                 short   = ws_base_name.replace("bnk-23-", "")
                 sub_workspaces.append({
                     "slot":    slot,
